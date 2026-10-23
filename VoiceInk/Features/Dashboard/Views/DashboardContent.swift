@@ -326,7 +326,11 @@ struct DashboardContent: View {
     }
 
     private var canViewInsights: Bool {
-        hasLoadedStatsSnapshot && statsSummary.totalDuration >= Self.insightsUnlockDuration
+        #if LOCAL_BUILD
+            hasLoadedStatsSnapshot
+        #else
+            hasLoadedStatsSnapshot && statsSummary.totalDuration >= Self.insightsUnlockDuration
+        #endif
     }
 
     private var shouldShowLockedInsightsState: Bool {
@@ -334,7 +338,11 @@ struct DashboardContent: View {
     }
 
     private var canViewPeakHours: Bool {
-        hasLoadedStatsSnapshot && selectedTotals.duration >= Self.peakHoursUnlockDuration && selectedPeakHours.hasData
+        #if LOCAL_BUILD
+            hasLoadedStatsSnapshot && selectedPeakHours.hasData
+        #else
+            hasLoadedStatsSnapshot && selectedTotals.duration >= Self.peakHoursUnlockDuration && selectedPeakHours.hasData
+        #endif
     }
 
     private var shouldLockPeakHours: Bool {
