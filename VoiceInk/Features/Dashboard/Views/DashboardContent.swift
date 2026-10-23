@@ -922,7 +922,7 @@ struct DashboardContent: View {
     }
 
     private var formattedAllTimeWords: String {
-        let words = Formatters.formattedCompactNumber(statsSummary.totalWords)
+        let words = Formatters.formattedNumber(statsSummary.totalWords)
         let wordUnit = statsSummary.totalWords == 1 ? String(localized: "word") : String(localized: "words")
         return String(localized: "\(words) \(wordUnit)")
     }

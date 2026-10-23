@@ -43,7 +43,7 @@ struct DashboardEditorialSummaryCard: View {
 
             HStack(alignment: .top, spacing: 20) {
                 fact(
-                    value: summary.hasData ? Formatters.formattedCompactNumber(summary.wordCount) : "--",
+                    value: summary.hasData ? Formatters.formattedNumber(summary.wordCount) : "--",
                     caption: "words captured"
                 )
                 fact(
