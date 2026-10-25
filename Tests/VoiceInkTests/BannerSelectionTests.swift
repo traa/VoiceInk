@@ -156,38 +156,6 @@ struct BannerSelectionTests {
 
     @Test func layoutConstantsMatchSpec() {
         #expect(BannerTreatment.artWidthFraction == 0.55)
-        #expect(BannerTreatment.minimumCardWidth == 620)
-    }
-
-    // MARK: - Art plan (locked state, spec §8.6 item 5)
-
-    @Test func unlockedWideTierDrawsArtAndBookWithoutWash() {
-        let plan = BannerTreatment.artPlan(isLocked: false, hasBook: true, hasArtImage: true, tierShowsBook: true)
-        #expect(plan == .init(drawsArt: true, drawsBook: true, artIsLocked: false, washOpacity: 0))
-    }
-
-    @Test func lockedKeepsArtButHidesBook() {
-        let plan = BannerTreatment.artPlan(isLocked: true, hasBook: true, hasArtImage: true, tierShowsBook: true)
-        #expect(plan.drawsArt)
-        #expect(!plan.drawsBook)
-        #expect(plan.artIsLocked)
-        #expect(plan.washOpacity == BannerTreatment.overlapWashOpacity)
-    }
-
-    @Test func lockedWithoutArtDrawsNothing() {
-        let plan = BannerTreatment.artPlan(isLocked: true, hasBook: true, hasArtImage: false, tierShowsBook: true)
-        #expect(!plan.drawsArt && !plan.drawsBook)
-    }
-
-    @Test func narrowTierKeepsArtDropsBook() {
-        let plan = BannerTreatment.artPlan(isLocked: false, hasBook: true, hasArtImage: true, tierShowsBook: false)
-        #expect(plan.drawsArt && !plan.drawsBook && !plan.artIsLocked)
-        #expect(plan.washOpacity == BannerTreatment.overlapWashOpacity)
-    }
-
-    @Test func noBookNeverDrawsBook() {
-        let plan = BannerTreatment.artPlan(isLocked: false, hasBook: false, hasArtImage: false, tierShowsBook: true)
-        #expect(!plan.drawsBook && !plan.drawsArt)
     }
 
     @Test func lockedTreatmentConstantsMatchSpec() {
@@ -207,15 +175,15 @@ struct BannerSelectionTests {
         )
     }
 
-    // MARK: - Open book ratio vs. subtitle wording
+    // MARK: - Reveal ratio vs. subtitle wording
 
-    @Test func openBookRatioClampsWhenRepeatsNotAllowed() {
+    @Test func revealRatioClampsWhenRepeatsNotAllowed() {
         let b = book(wordCount: 50_000)
-        #expect(DashboardProgressBenchmark.openBookRatio(words: 150_000, book: b, allowsRepeats: false) == 1)
-        #expect(DashboardProgressBenchmark.openBookRatio(words: 150_000, book: b, allowsRepeats: true) == 3)
-        #expect(DashboardProgressBenchmark.openBookRatio(words: 25_000, book: b, allowsRepeats: false) == 0.5)
-        #expect(DashboardProgressBenchmark.openBookRatio(words: 25_000, book: b, allowsRepeats: true) == 0.5)
-        #expect(DashboardProgressBenchmark.openBookRatio(words: 10, book: book(wordCount: 0), allowsRepeats: true) == 0)
+        #expect(DashboardProgressBenchmark.revealRatio(words: 150_000, book: b, allowsRepeats: false) == 1)
+        #expect(DashboardProgressBenchmark.revealRatio(words: 150_000, book: b, allowsRepeats: true) == 3)
+        #expect(DashboardProgressBenchmark.revealRatio(words: 25_000, book: b, allowsRepeats: false) == 0.5)
+        #expect(DashboardProgressBenchmark.revealRatio(words: 25_000, book: b, allowsRepeats: true) == 0.5)
+        #expect(DashboardProgressBenchmark.revealRatio(words: 10, book: book(wordCount: 0), allowsRepeats: true) == 0)
     }
 
     /// The caption shows "N×" exactly when the subtitle reports a repeat, with the same N.
@@ -223,7 +191,7 @@ struct BannerSelectionTests {
         let b = book(wordCount: 47_094)
         for words in [0, 20_000, 47_094, 94_187, 94_188, 100_000, 200_000, 1_000_000] {
             for allowsRepeats in [false, true] {
-                let ratio = DashboardProgressBenchmark.openBookRatio(words: words, book: b, allowsRepeats: allowsRepeats)
+                let ratio = DashboardProgressBenchmark.revealRatio(words: words, book: b, allowsRepeats: allowsRepeats)
                 let equivalence = DashboardProgressBenchmark.equivalence(for: words, book: b, allowsRepeats: allowsRepeats)
                 let captionMultiple = ratio >= 2 ? Int(ratio.rounded(.down)) : nil
                 if case .repeated(_, let count) = equivalence {

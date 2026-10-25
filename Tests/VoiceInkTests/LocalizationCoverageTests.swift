@@ -16,11 +16,10 @@ struct LocalizationCoverageTests {
         "That doesn't look like an image (PNG, JPEG or HEIC).",
         "That image is too large (over 10 MB or 50 megapixels).",
         "That image is too small to use as a banner (at least 300 px wide).",
-        // Open book (OpenBookGeometry, DashboardOpenBookView)
+        // Grid reveal caption (ProgressCaption, DashboardBookBannerArt)
         "~%@ of %@ pages dictated",
         "All %@ pages dictated",
         "All %@ pages · %@×",
-        "Open book: %@",
         // Hero subtitle estimate variant (DashboardContent)
         "Dictated %@, ~%@ words from %@.",
         // Hero book chip and menu (DashboardHeroCard)

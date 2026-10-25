@@ -8,15 +8,15 @@ The dashboard hero card ("You have saved 1h 9m with VoiceInk" / "Dictated 4,987 
 
 We want the comparison to feel personal and tangible:
 - the user picks the book, including any book they own or love, found by title;
-- progress is shown as an open book whose left/right page stacks show how far through that book the user's dictation would reach.
+- progress is shown as a grid colour reveal over the banner art: the art is divided into cells (one per page, at most 240); cells already dictated show the art in full colour, the rest show it muted.
 
 ## 2. Goals
 
 1. The user adds a book by typing a title, picking a match from Open Library results, and getting its cover and word count automatically. No word-count typing is required.
-2. Custom and built-in books appear in one list. Selecting a book drives the hero subtitle, the cover, and the open-book visual.
+2. Custom and built-in books appear in one list. Selecting a book drives the hero subtitle, the cover, and the grid reveal.
 3. Users can hide built-in books and delete custom books. Hidden or deleted books leave both the selection and the comparison.
 4. Users can optionally override a custom book's word count with an exact number. Built-in books are hide/show only (Author's call).
-5. Books that have a cover or a custom banner get banner art derived from it on the right of the hero (replacing the mountain art for those books; books with neither keep the original mountain bitmap, §8.6), with a natively drawn, static, realistic open book in front of it whose page stacks are proportional to progress, with the caption "~100 of 600 pages dictated".
+5. Books that have a cover or a custom banner get banner art derived from it on the right of the hero (replacing the mountain art for those books; books with neither keep the original mountain bitmap, §8.6), revealed as a grid: one cell per page (at most 240), dictated cells in full colour and the rest muted, with the caption "~100 of 600 pages dictated" on a small dark pill (§8.7).
 6. Each book can have a custom banner image (pasted URL or uploaded file) that overrides the cover; it can be removed.
 7. Automatic selection keeps today's behaviour (largest book passed, generalised over the visible books).
 
@@ -131,10 +131,10 @@ They are hardcoded in `enum DashboardProgressBenchmark` (DashboardStatsModels.sw
 4. Users can **hide built-in** books; custom books can be **deleted**. Hidden or deleted books are removed from selection and comparison.
 5. **Hero art.** For books with a cover or custom banner the old mountain bitmap is replaced by two things (books with neither keep the bitmap, §8.6):
    - **Banner art derived from the book's cover** (or the user's custom banner), full-bleed on the right ~55 % of the card, scaled to fill, softly faded into the beige gradient on its left edge, slightly desaturated and warmed so text stays legible; locked state treated as before (§8.6).
-   - A **static, natively drawn open book** in front of it, with two spreads, a gutter shadow, page curvature and stacked page edges; left stack ∝ progress (clamped to 0…1), right stack = the remainder; caption "~100 of 600 pages dictated" under the book (the chosen mockup).
-   - With no cover and no banner: the beige gradient and the open book with tinted boards.
+   - A **grid colour reveal** over that art (§8.7): `min(totalPages, 240)` cells; dictated cells show the art in full colour, the others muted; a small dark caption pill "~100 of 600 pages dictated" sits in the art's lower-right corner. (Round 3 replaced the earlier static open-book illustration.)
+   - With no cover and no banner: the original mountains bitmap is the art, with the same grid reveal.
 6. **Project Gutenberg** exact counts are out of scope.
-7. **Automatic selection keeps today's behaviour**, generalised over the visible books: the largest book already passed; before any is passed, the remainder to the first book; past the largest, multiples. The open book still shows the resolved book's progress (clamped to 1 when passed). No migration concerns (no existing users).
+7. **Automatic selection keeps today's behaviour**, generalised over the visible books: the largest book already passed; before any is passed, the remainder to the first book; past the largest, multiples. The grid reveal still shows the resolved book's progress (clamped to 1 when passed). No migration concerns (no existing users).
 8. **Privacy signed off.** The Google Books fallback ships (§7); the in-sheet disclosure stays; a README note is recommended (§9).
 9. **Custom banners.** Each custom book can have a custom banner image, provided by (a) pasting an http/https image URL (validated by downloading and decoding it, 10 MB limit, 10 s timeout) or (b) an Upload button (`NSOpenPanel`, PNG/JPEG/HEIC). It takes precedence over the Open Library cover. A stored copy (max ~1600 px wide JPEG) lives in Application Support (`BookBanners/<bookID>.jpg`), with a "Remove custom banner" action back to the cover. **Author's call: built-in books can have a custom banner too.** They have no cover at all, so without this they would only ever show the plain gradient, and the control is purely local and opt-in (no default network traffic). The cost is a small `builtInArt` map in the store file because built-ins are not persisted as books. The banner controls live in the Manage Books row and as an optional step in Add Book.
 
@@ -285,7 +285,7 @@ If `wordCount` is nil, the sheet shows "No page count found" with a required "Wo
 ### 8.4 UI flows
 
 **Entry point: book chip in the hero (Author's call).**
-- Add a third control to the hero's button row (a wrapping flow, `HeroButtonFlow`, see §8.6.3; at the default width the chip wraps onto a second line): a capsule showing a 16×22 cover thumbnail (dropped if the hero looks cluttered, see §8.6), the book title (truncated, max ~180 pt), and a chevron.
+- Add a third control to the hero's button row (the wrapping flow `HeroButtonFlow`; with the copy no longer sharing the card with an illustration it fits on one line at the default ~682 pt card width): a capsule showing a 16×22 cover thumbnail, the book title (truncated, max ~180 pt), and a chevron.
 - Clicking it opens a `Menu`:
   - **Automatic** — checkmark when `dashboardSelectedBookID` is empty; no subtitle.
   - Divider. All visible books, sorted by word count ascending, each as `Cover · Title — 21,180 words` or `~90,200 words`; a checkmark marks the selected one.
@@ -337,7 +337,7 @@ Automatic (today's behaviour, generalised over `sorted`):
 
 Notes:
 - **Automatic keeps today's behaviour (owner decision):** the largest book already passed is reported as "equivalent to …"; before any book is passed, the remainder to the *first* (smallest) book is reported; at or beyond the largest visible book, multiples of that book are reported ("twice", "N times"). With the default list this is exactly today's output. No migration is needed (no existing users depend on it).
-- The open book shows the progress of the resolved book: `P = clamp(words / book.wordCount, 0, 1)`, which is 1 whenever Automatic reports a passed book.
+- The grid reveal shows the progress of the resolved book: `p = clamp(words / book.wordCount, 0, 1)`, which is 1 whenever Automatic reports a passed book.
 - Clearing on hide/delete happens in the action itself (Manage panel), so stored state never points at a missing book. The render-time check is a defensive fallback.
 - Hiding the selected book shows no alert; the chip just shows the Automatic result.
 - The "Automatic" menu entry has no subtitle; it is a plain checkmarked row.
@@ -359,85 +359,39 @@ For the resolved book `b` and dictated words `w`, let `progress = w / b.wordCoun
 
 ### 8.6 Hero layout and background
 
-Layers, back to front: (1) background: the beige gradient **or**, for books without art, the original full-card bitmap; (2) book banner art on the right (cover/custom banner only), (3) copy on the left and the open book on the right, (4) locked treatment.
+Layers, back to front: (1) background: the beige gradient **or**, for books without art, the original full-card bitmap; (2) book banner art on the right (cover, custom banner, or the default mountains bitmap), (3) the grid reveal over the art, (4) copy on the left and the caption pill, (5) locked treatment.
 
-**Ruling (round 2, reverses the earlier "delete the asset" decision):** a pure function `BookArtSource.resolve(book:customBannerExists:coverCached:)` returns `.customBanner`, `.cover` or `.defaultBanner`. `.defaultBanner` (every built-in without a custom banner, custom books with no cover/banner or whose cover is not cached yet, and the no-book state) draws the ORIGINAL `momentum-hero-bg` bitmap exactly as before the feature (full-card, `scaledToFill`; locked: `blur(2.5)`, `saturation(0.78)`, white 0.32). The imageset is therefore **kept** (restored from `71d59cd^`). `.cover`/`.customBanner` keep the native gradient plus faded art below.
+**Ruling (round 2, reverses the earlier "delete the asset" decision; refined in round 3):** a pure function `BookArtSource.resolve(book:customBannerExists:coverCached:)` returns `.customBanner`, `.cover` or `.defaultBanner`. `.defaultBanner` (every built-in without a custom banner, custom books with no cover/banner or whose cover is not cached yet, and the no-book state) uses the ORIGINAL `momentum-hero-bg` bitmap as its art (`BannerTreatment.defaultBannerImage`, sharp, `scaledToFill`, anchored to its right side where the mountains are, in the same right ~55 % art frame as covers and banners, so it gets the same grid reveal and locked treatment). The imageset is therefore **kept** (restored from `71d59cd^`). The card background is always the native beige gradient.
 
 1. **Beige gradient (books with cover/custom banner).** `DashboardImpactBackground` draws a native `LinearGradient` from `Color(red: 0.98, green: 0.85, blue: 0.74)` (top-left) to `Color(red: 0.99, green: 0.91, blue: 0.83)` (right), sampled from the PNG's left side. For `.defaultBanner` it draws `Image("momentum-hero-bg")` instead (the asset is kept, see the ruling above).
 2. **Banner art (`DashboardBookBannerArt`).** The old mountain bitmap is replaced by art derived from the selected book. Source precedence:
    1. the custom banner (`customBannerFile`, §8.2);
    2. the Open Library cover, `-L` size (§8.3);
-   3. none (`.defaultBanner`): the art layer is omitted and the background is the original mountains bitmap, with the tinted boards on top.
+   3. none (`.defaultBanner`): the original mountains bitmap is the art.
 
    Treatment:
    - Frame: the right ~55 % of the card, full height, full-bleed to the card's top, right and bottom edges (the card already clips to `cardCornerRadius`). The image is `.scaledToFill()` and clipped. A portrait cover is therefore a landscape crop of its middle; that is expected.
-   - **Left-edge fade:** a `.mask` with a horizontal `LinearGradient` that is clear at the art's left edge and fully opaque by ~40 % of the art width, so the art dissolves into the beige gradient.
-   - **Grading, to keep text contrast and a consistent warm feel:** `saturation(0.85)`, a warm overlay (`Color(red: 1.0, green: 0.86, blue: 0.68)` at ~0.20, `.softLight` or plain overlay) and a faint white veil (~0.10). Numbers are starting points; the builder tunes them.
+   - **Left-edge fade:** a `.mask` with a horizontal `LinearGradient` that is clear at the art's left edge and fully opaque by ~12 % of the art width (short, so the first grid columns stay visible at low progress).
+   - **Grading (round 3):** none. Full-colour cells show the art as is (cover/low-res banners keep their blur); the muted base is `saturation(0.25)` plus a 22 % black veil, tuned so muted art stays recognisable while the difference to full colour is obvious. The copy sits on the beige part of the fade; there is no wash over the art.
    - **Low-resolution handling.** Open Library `-M` is only ~180 px wide and even `-L` is ~500 px, scaled to roughly 420 pt × 190 pt (≈ 840 px wide at 2×). Therefore Open Library covers are always drawn with the blurred treatment: `blur(radius ≈ 10)` on the fill image, slightly over-scaled (≈ 1.15×) so blurred edges don't show transparent fringes at the card edges. Fetch the **`-L`** size for banner use (one file, `<coverID>-L.jpg`; the chip/thumbnail is downscaled from it). Custom banners are drawn sharp when `pixelWidth ≥ 1.5 × artWidth × backingScaleFactor`, otherwise with a lighter blur (≈ 4). The sharp cover therefore appears only in the chip thumbnail and in the Manage/Add rows, never magnified into the banner.
-   - The art never extends under the copy at normal widths. The copy column keeps its current maximums (`maxWidth: 620` for the subtitle); where they overlap the faded left edge the dark text colours (`DashboardMomentumBackground.headline` / `subtext`) remain legible by construction of the fade and the veil. Builder must verify with a very dark cover and a very light cover.
-3. **Foreground.** Card body is an `HStack(alignment: .center)`. The existing copy `VStack` sits on the left (`frame(maxWidth: .infinity, alignment: .leading)`). On the right sits `DashboardOpenBookView` plus a 16 pt caption row, drawn **in front of** the banner art with its own soft drop shadow so cream pages separate from any art. **Author's call:** the book sits in front and the art behind. If the result is cluttered, drop the thumbnail from the hero chip (keep only the title and chevron).
-   - **Ruling (Task 9): book scale.** The open book is drawn at 0.8 scale (192×112 pt, not ~240×118; the §8.7 coordinates are design units) so the book and the unsqueezed copy fit the real default card width of ~682 pt (window 950, sidebar 220, 24 pt padding per side). This overrides the earlier "do not shrink" note.
-   - **Ruling (Task 9): hero button row.** The hero buttons (insights, review corrections, book chip) sit in a wrapping flow (`HeroButtonFlow`), not a single `HStack`. At the default width the book chip wraps onto a second line, so the card is taller than before.
-4. **Narrow widths (Ruling, Task 9):** below ~620 pt the banner art (cover or custom banner) **stays** and only the open book is dropped. A 0.5 beige wash is drawn over the art so the copy stays legible. This is owner-requested (the cover becomes the banner) and overrides the earlier "drops both" behaviour; copy is still never truncated in favour of the book.
-5. **Locked state:** the background stack (gradient plus art, or the default bitmap) gets the same `blur(2.5)`, `saturation(0.78)` and white 0.32 overlay the PNG gets today. When a banner art source exists the art is still drawn, with that treatment applied on top of its own blur logic (the 0.5 beige wash of the no-book layout also applies). **Author's call:** hide the open book and the book chip while locked; the locked prompt needs the space.
-6. **Fallback.** No cover and no custom banner (every built-in by default, custom books whose cover is missing or still loading, manually added books): the original mountains bitmap (§8.6 ruling) plus a soft `RadialGradient` highlight behind the book (white 0.45 → 0), and the open book with tinted boards.
-7. **Boards tint.** The hardcover boards under the page blocks use `coverTint` (§8.1): the average colour (`CIAreaAverage`) of the *active banner source* (custom banner if present, else cover), darkened ~20 % so the boards stay distinct from the art behind. It is computed once when that image is first stored or downloaded, persisted, and recomputed when the banner is set or removed. Without a `coverTint`, use a deterministic colour from a hash of `id` over a curated palette of 8 cloth colours (oxblood, navy, forest, ochre, …).
+   - The copy never runs over the grid: headline and subtitle wrap at fixed maxima (330 / 270 pt) so they end where the art's short fade begins (~308 pt into a ~682 pt card).
+3. **Foreground.** The card body is the copy column (headline wraps at ~330 pt, subtitle at ~270 pt, so the copy only touches the art's faded left edge) with the button row below it. There is no illustration in front of the art, no light pool and no wash over the art. **Round 3 ruling:** the open book, its 0.8-scale tier, the extra wash tier and the narrow-width "book dropped" tier were removed; the layout is a single tier at every width, the art is just art.
+4. **Grid reveal over the art.** Spec §8.7. The same art is drawn twice (muted base, full-colour layer masked by the filled cells); locked state draws the art single-layer, no grid.
+5. **Locked state:** the background stack gets the same `blur(2.5)`, `saturation(0.78)` and white 0.32 overlay the PNG got before the feature, plus a 0.5 beige wash so the lock prompt stays legible over art. No grid, no caption. **Author's call:** hide the book chip while locked; the locked prompt needs the space.
+6. **Fallback.** No cover and no custom banner (every built-in by default, custom books whose cover is missing or still loading, manually added books, and the no-book state): the original mountains bitmap (§8.6 ruling) is the art, anchored to its right side and framed like any other art; the grid is drawn when there is a book.
+7. **Placeholder tint.** The chip's placeholder thumbnail (no cover, no banner) uses `coverTint` (§8.1): the average colour (`CIAreaAverage`) of the *active banner source* (custom banner if present, else cover), darkened ~20 %. It is computed once when that image is first stored or downloaded, persisted, and recomputed when the banner is set or removed. Without a `coverTint`, use a deterministic colour from a hash of `id` over a curated palette of 8 cloth colours (oxblood, navy, forest, ochre, …).
 
-### 8.7 Open-book rendering (static `Canvas`)
+### 8.7 Grid colour reveal
 
-New `VoiceInk/Features/Dashboard/Components/DashboardOpenBookView.swift`. Geometry is a pure function, `OpenBookGeometry.make(size:progress:)`, which returns paths and stack counts, so it is unit-testable. The view only paints. No `TimelineView`, no animations, and `.animation(nil)` on value changes.
+Pure logic lives in `VoiceInk/Features/Dashboard/Components/ProgressGrid.swift`; the painting is in `DashboardBookBannerArt`.
 
-Inputs:
+- **Cells.** `N = min(book.pagesEquivalent, 240)`; one cell is `pagesPerCell = totalPages / N` pages (exactly one page for books of up to 240 pages). `ProgressGrid.make(totalPages:size:)` picks the column count whose slots are closest to square for the art region (right ~55 % of the card), `rows = ceil(N / columns)`, skipping column counts that would leave an empty trailing column. Surplus slots in the last column are not drawn (exactly `N` cells). Cells fill **column-major**: top to bottom within a column, columns left to right (like the consistency calendar). Each cell is its slot inset by a 1.5 pt gap, drawn as a rounded square (radius 2.5 pt, capped at a quarter of the cell).
+- **Reveal.** `p = clamp(words / book.wordCount, 0, 1)` (`DashboardProgressBenchmark.revealRatio`; NaN counts as 0). `filledCells = floor(p · N)` (exact multiples snap, so 1/3 of 3 cells is exactly 1); the next cell gets opacity `frac(p · N)`; `p ≥ 1` fills all `N`.
+- **Painting.** Layer 1: the art, `saturation(0.25)` and a 22 % black veil, masked by all cells (the gaps show the beige card). Layer 2: the art in full colour, masked by the cells with their reveal opacity. A 0.5 pt white 0.16 hairline traces every cell. The left fade mask applies to both layers. No white or bright overlay, no light pool.
+- **Caption.** A pill in the art's lower-right corner: black 0.45 fill, white 11 pt semibold monospaced-digit text (fixed colours, readable over any art and in dark mode). Text from `ProgressCaption`: "~%@ of %@ pages dictated"; when finished "All %@ pages dictated", or "All %@ pages · %@×" at ≥ 2 repeats, with a green check. `pagesDictated = round(p · T)` and never equals `T` before the book is finished. Hidden until stats have loaded (the grid then shows 0 %).
+- **Locked / no book.** Locked: no grid, no caption. No book: art without grid.
+- **Accessibility.** The art is hidden from VoiceOver; the caption pill is a single element whose label is the caption text.
 
-```
-P   = clamp(dictatedWords / book.wordCount, 0, 1)
-T   = book.pagesEquivalent                       (≥ 2)
-L   = Int((P * Double(T)).rounded())             pages dictated (caption)
-```
-
-Caption: "~\(L) of \(T) pages dictated", using a new key "~%@ of %@ pages dictated" with locale-formatted numbers. When P = 1: "All \(T) pages dictated", or "All \(T) pages · %@×" when progress ≥ 2. Use `.monospacedDigit()`, centred under the book, in the fixed `DashboardMomentumBackground.subtext` colour on a white 0.7 capsule (never a semantic colour: the card is light in dark mode too, and the capsule keeps it legible over any banner art).
-
-Coordinate frame (W×H = 240×118, origin top-left):
-- Gutter x = W/2.
-- Book block from y = 14 to 104. Below it, the boards: a slightly larger rounded rect, 4 pt thick, tinted, with a darker 1 pt edge.
-
-Stack thickness:
-- `S = 14 pt` total edge depth to distribute; a constant representing the whole book.
-- `sL = S * P`, `sR = S * (1 − P)`.
-- This is exactly proportional: 100/600 → sL = 2.33 pt, sR = 11.67 pt, a 1:5 ratio, i.e. visually 1/6 of the total.
-- No minimum is applied except a 0.5 pt hairline when 0 < P < 0.04 or 0.96 < P < 1, so a non-zero side never disappears. Document that this is the only distortion.
-
-Stacked page edges:
-- Each side's stack is drawn as the pages' outer and bottom edges offset down and outward by up to `sL`/`sR`: the stack grows *below and outside* the top page, like a real book seen from slightly above.
-- Fill with a vertical cream gradient (`#F3EAD8` → `#E3D6BE`).
-- Overlay `n = max(1, Int(s / 1.1))` thin lines (0.4 pt, `black.opacity(0.08)`) parallel to the outer edge to read as individual leaves.
-
-Page curvature:
-- Each top page is a closed path. Its top edge is a quadratic from the outer top corner `(xOuter, 14 + s)` to the gutter `(W/2, 22 + s)` with the control point at `(lerp(xOuter, W/2, 0.55), 6 + s)`. The pages bow up and dip into the spine.
-- The bottom edge mirrors this with a smaller sag (gutter y = 100, outer y = 104 − s·0.2).
-- The outer edge is a slight convex curve (control point bulging outward 3 pt).
-- The page surface is a horizontal `LinearGradient` (paper white `#FBF6EC` at the outer edge → `#EFE5D2` at 85 % toward the gutter).
-
-Gutter shadow:
-- A second fill over each page: a `LinearGradient` from `black.opacity(0.22)` at the gutter to 0 over 18 % of the page width.
-- Plus a 1 pt dark crease line at x = W/2 drawn on top of both pages.
-
-Text hint:
-- On each page, 7–9 rows of 1.2 pt rounded lines (`black.opacity(0.10)`), with lengths from a fixed pseudo-random table so the result is deterministic and static. They follow the page curvature by sampling the top-edge quadratic for y offsets.
-- **Author's call:** include it; it sells "realistic" at small sizes.
-
-Drop shadow: `context.addFilter(.shadow(color: .black.opacity(0.18), radius: 8, y: 5))` on the boards layer only.
-
-Progress ≥ 100 %:
-- P = 1, so `sR = 0`. The right side is a single page with no stack (the last page; the book is finished).
-- Draw a small ribbon bookmark (accent colour `DashboardMomentumBackground.accent`, 5×26 pt with a notched tail) hanging from the gutter top over the right page as the "finished" cue.
-- Use the caption variants above. The subtitle already says "equivalent to …" / "… times".
-
-Progress = 0 (no words yet): P = 0 and `sL = 0`, so all pages sit in the right stack. The caption reads "0 of T pages dictated". Before stats load (`hasLoadedStatsSnapshot == false`), draw the book at P = 0 with no caption.
-
-Accessibility: one `accessibilityElement` with label "Open book: <title>" and value "<caption>". Add `accessibilityHidden(true)` for the drawing internals.
-
-Dark mode: the hero is an intentionally light card (fixed colours in `DashboardMomentumBackground`), so book colours are fixed too.
 
 ### 8.8 Offline, errors, caching summary
 
@@ -452,7 +406,7 @@ Dark mode: the hero is an intentionally light card (fixed colours in `DashboardM
 |---|---|
 | `VoiceInk/Features/Dashboard/State/DashboardStatsModels.swift` | `DashboardProgressBenchmark`: replace private `Milestone` and the lists with `builtInBooks: [DashboardBook]` (stable IDs). Make `equivalence` take the resolved book and `allowsRepeats`; add `.none`. Add the pure `resolveBook(words:visible:selectedID:)` implementing the generalised current behaviour (§8.4). |
 | `VoiceInk/Features/Dashboard/Views/DashboardContent.swift` | Inject `DashboardBookStore`; `@AppStorage` for selection and hidden IDs; feed the resolved book, progress and banner/cover images into `heroSection`; update `formattedProgressBenchmarkText` (estimate variant, `.none`); present the Add Book sheet and Manage Books `.sidePanel`. |
-| `VoiceInk/Features/Dashboard/Components/DashboardHeroCard.swift` | New inputs (`book: DashboardBook?`, `progress`, `bannerImage: NSImage?`, `bannerIsCustom`, menu callbacks); `HStack` layout with `DashboardOpenBookView` and a wrapping `HeroButtonFlow` button row; book chip/menu; `DashboardImpactBackground` keeps the bitmap for books without art and uses the beige gradient plus the new `DashboardBookBannerArt` layer for books with a cover/custom banner (§8.6). |
+| `VoiceInk/Features/Dashboard/Components/DashboardHeroCard.swift` | New inputs (`book: DashboardBook?`, `progressRatio`, `bannerImage: NSImage?`, `usesDefaultBanner`, `isCustomBanner`, menu callbacks); single-tier layout (copy left, banner art behind the right ~55 %); `HeroButtonFlow` button row; book chip/menu; `DashboardImpactBackground` is always the beige gradient, the art (cover, custom banner or the default mountains bitmap) is drawn by `DashboardBookBannerArt` with the grid reveal (§8.6, §8.7). |
 | `VoiceInk/Assets.xcassets/momentum-hero-bg.imageset/` | Keep (default banner for books without art; round-2 ruling reverses the earlier deletion). |
 | `VoiceInk/Localizable.xcstrings` | New strings (estimate subtitle, caption variants, sheet/panel copy, banner copy and import errors, disclosure, bookmark accessibility), with de/fr/zh-Hans. |
 | `README.md` | Recommended (owner signed off the privacy trade-off): add a short note under "Privacy First" that transcription stays fully offline and that dashboard book search and banner-by-URL are opt-in online lookups made only when the user uses them. |
@@ -464,7 +418,7 @@ New files:
 - `Dashboard/Services/GoogleBooksPageCountService.swift`
 - `Dashboard/Services/BookCoverCache.swift`
 - `Dashboard/Services/BannerImageImporter.swift`
-- `Dashboard/Components/DashboardOpenBookView.swift` (+ `OpenBookGeometry`)
+- `Dashboard/Components/ProgressGrid.swift` (`ProgressGrid`, `GridReveal`, `ProgressCaption`)
 - `Dashboard/Components/DashboardBookBannerArt.swift`
 - `Dashboard/Views/AddBookSheet.swift`
 - `Dashboard/Views/ManageBooksPanel.swift`
@@ -485,12 +439,10 @@ Swift Testing in `Tests/VoiceInkTests/` (match `AutoLearnAIReviewerTests.swift` 
 - `BookEstimationTests`:
   - pages × 275;
   - `pagesEquivalent` with a page count, without (words/275 with a floor of 2), and after override.
-- `OpenBookGeometryTests`:
-  - P = 100/600 gives `sL/(sL+sR) ≈ 1/6` (±0.01);
-  - P = 0 → sL = 0;
-  - P > 1 clamps to sR = 0 with `isFinished`;
-  - the hairline rule applies only in (0, 0.04) and (0.96, 1);
-  - caption pages L = round(P·T).
+- `ProgressGridTests`:
+  - cell count = `min(totalPages, 240)`; `pagesPerCell`; roughly square cells; `columns × rows ≥ N`; column-major order;
+  - reveal: p = 0 → 0 cells, p = 1 → N, 100/600 → ≈ N/6 (±1 cell), fractional next-cell opacity, clamping above 1, NaN/∞ safe;
+  - caption pages `round(p·T)`, never "N of N" before finished, "×" only for repeats.
 - `OpenLibrarySearchDecodingTests`:
   - decode a recorded `search.json` fixture, embedded as a string, including missing `cover_i` / `number_of_pages_median`;
   - URL construction (escaping, `fields=`, `limit`);
@@ -504,9 +456,9 @@ Swift Testing in `Tests/VoiceInkTests/` (match `AutoLearnAIReviewerTests.swift` 
 - No live-network tests.
 
 Manual QA:
-- the open-book visual at 0 %, 1/6, 50 %, 99 %, 100 %, and 250 %;
+- the grid reveal at 0 %, 10 %, 60 %, 100 % and 250 % over a cover, a custom landscape banner and the mountains bitmap; muted vs full colour clearly distinguishable, muted art still recognisable, caption pill legible, dark mode and locked state;
 - the banner with: an Open Library cover (blurred treatment), a high-res custom banner, a tiny low-res custom banner, a very light cover, a very dark cover; headline and subtitle stay readable in each at several window widths;
-- no cover and no banner → beige gradient plus tinted boards;
+- no cover and no banner → the mountains bitmap as art, with the grid;
 - the narrow window (book drops, banner art stays under a beige wash);
 - the locked state (blur/desaturation as before, book hidden);
 - offline add (Wi-Fi off → error state → Add manually);
@@ -526,7 +478,7 @@ xcodebuild -project VoiceInk.xcodeproj -scheme VoiceInk -configuration Debug COD
 ## 11. Open questions / left to the builder
 
 1. **Backup/export:** `ImportExportService` (`VoiceInk/Features/Settings/Backup/ImportExportService.swift`) exports settings and vocabulary. Should custom books, banner images and hidden/selection prefs be included? Proposed: a later follow-up, not in this scope.
-2. **Auto-fetched covers for built-ins:** built-ins have no cover, so by default they show the beige gradient with tinted boards. Fetching real Open Library covers for built-ins (hardcoded `cover_id`s) would look nicer but adds default network traffic, which the anti-goals forbid. Author's call: no. Users can still give a built-in a custom banner (§8.4, Decision 9).
+2. **Auto-fetched covers for built-ins:** built-ins have no cover, so by default they show the mountains bitmap. Fetching real Open Library covers for built-ins (hardcoded `cover_id`s) would look nicer but adds default network traffic, which the anti-goals forbid. Author's call: no. Users can still give a built-in a custom banner (§8.4, Decision 9).
 3. **Built-in page counts:** shown as words/275 ("~77 pages" for The Metamorphosis). Real editions differ; acceptable because it is marked "~".
 4. **Builder's choices:** the final banner look (blur radius, desaturation, warm tint, fade width, as long as headline and subtitle stay legible), exact colours, the cloth palette, stack depth `S = 14 pt`, and book size. Keep the proportionality rule and the "only hairline distortion" rule intact.
 5. **Open Library `User-Agent`** contact string: confirm the URL or email the owner wants published.

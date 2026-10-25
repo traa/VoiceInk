@@ -20531,35 +20531,6 @@
         }
       }
     },
-    "Open book: %@" : {
-      "comment" : "Accessibility label of the open-book illustration. The argument is the book title.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aufgeschlagenes Buch: %@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open book: %@"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Livre ouvert : %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开的书：%@"
-          }
-        }
-      }
-    },
     "Open the VoiceInk %@ update" : {
       "comment" : "Help tooltip for the button that opens an available app update.",
       "localizations" : {

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let users add, pick, hide, delete and re-banner books for the dashboard hero comparison, with the hero showing cover-derived banner art and a static, progress-proportional open book.
+**Goal:** Let users add, pick, hide, delete and re-banner books for the dashboard hero comparison, with the hero showing cover-derived banner art and a grid colour reveal of that art (one cell per page, at most 240) showing progress. (Round 3 replaced the originally planned open-book illustration.)
 
-**Architecture:** A `DashboardBook` value model plus a JSON-backed `DashboardBookStore` feed pure resolution functions in `DashboardProgressBenchmark` (today's Automatic behaviour, generalised). Network access is isolated in small injectable services (Open Library search, Google Books page count, cover cache, banner importer). The hero renders only from local state: beige gradient, `DashboardBookBannerArt`, copy, and a `Canvas`-drawn `DashboardOpenBookView` whose geometry is a pure, unit-tested function.
+**Architecture:** A `DashboardBook` value model plus a JSON-backed `DashboardBookStore` feed pure resolution functions in `DashboardProgressBenchmark` (today's Automatic behaviour, generalised). Network access is isolated in small injectable services (Open Library search, Google Books page count, cover cache, banner importer). The hero renders only from local state: beige gradient, `DashboardBookBannerArt`, copy, and a grid colour reveal over the art whose layout, reveal and caption logic is a pure, unit-tested `ProgressGrid` / `GridReveal` / `ProgressCaption`.
 
 **Tech Stack:** Swift 5 mode, SwiftUI (`Canvas`), AppKit (`NSImage`, `NSOpenPanel`), ImageIO/CoreImage, `URLSession` (ephemeral), Swift Testing, String Catalog. macOS 15.0 target.
 
@@ -22,8 +22,8 @@
 - Banners: `~/Library/Application Support/com.prakashjoshipax.VoiceInk/BookBanners/<bookID>.jpg` (user data, not cache); http/https only; 10 MB limit (streamed byte count and `Content-Length`); 10 s timeout; downscale to max 1600 px wide; JPEG quality ≈ 0.85; reject width < 300 px; uploads via `NSOpenPanel` limited to `.png`, `.jpeg`, `.heic`.
 - Built-in IDs (stable): `builtin.metamorphosis`, `builtin.animal-farm`, `builtin.great-gatsby`, `builtin.iliad`, `builtin.odyssey`, `builtin.iliad-odyssey`, `builtin.war-and-peace`. Custom IDs: `custom.<UUID>`. Built-in titles keep their existing `Localizable.xcstrings` keys (`LocalizedStringResource`); custom titles are never localized.
 - Overrides are for custom books only; built-ins are hide/show + optional custom banner only. Duplicate Open Library work keys are blocked ("Already added", disabled).
-- Open book is static: no `TimelineView`, no animations, no image assets. Total stack depth `S = 14 pt`; frame 240×118 pt; hairline 0.5 pt only when `0 < P < 0.04` or `0.96 < P < 1`.
-- Hero: art on right ~55 % of card; open book and art dropped below ~620 pt card width; open book hidden when locked; locked background keeps `blur(2.5)`, `saturation(0.78)`, white 0.32 overlay.
+- Grid colour reveal (round 3; replaced the open book): `N = min(totalPages, 240)` cells, column-major fill, filled cells in full colour, the rest muted, next cell partial; no animations; caption pill in the art's lower-right corner. See spec §8.7.
+- Hero: art on the right ~55 % of the card at every width (single layout tier); locked state draws the art blurred/washed with no grid; locked background keeps `blur(2.5)`, `saturation(0.78)`, white 0.32 overlay.
 - Default experience (built-ins, no custom books, no banners) makes zero network requests; no dictation data ever leaves the machine.
 - Localization: every new user-facing string ships with de/fr/zh-Hans in the same change (no `new`-state entries).
 - Logging: `Logger(subsystem: "com.prakashjoshipax.voiceink", category: …)`.
@@ -317,7 +317,7 @@ git commit -m "feat(dashboard): add banner image importer with validation and no
 
 ---
 
-### Task 6: `OpenBookGeometry` and `DashboardOpenBookView`
+### Task 6: `OpenBookGeometry` and `DashboardOpenBookView` (SUPERSEDED in round 3 by `ProgressGrid`, `GridReveal`, `ProgressCaption`; the open-book code and tests were deleted. See spec §8.7; the steps below are historical.)
 
 **Files:**
 - Create: `VoiceInk/Features/Dashboard/Components/OpenBookGeometry.swift`
@@ -478,14 +478,14 @@ git commit -m "feat(dashboard): add Manage Books panel"
   - `struct BookArtSource: Equatable { enum Kind { case customBanner, cover, none }; let kind: Kind; static func resolve(book: DashboardBook, customBannerExists: Bool, coverCached: Bool) -> BookArtSource }`
   - `enum BannerTreatment { static func blurRadius(isCustomBanner: Bool, imagePixelWidth: Int, artWidth: CGFloat, backingScale: CGFloat) -> CGFloat; static let coverBlurRadius: CGFloat; static let lowResCustomBlurRadius: CGFloat; static let artWidthFraction: CGFloat; static let minimumCardWidth: CGFloat }`
   - `struct DashboardBookBannerArt: View { init(image: NSImage, isCustomBanner: Bool) }`
-  - `DashboardHeroCard` gains inputs: `book: DashboardBook?`, `progress: Double`, `progressRatio: Double`, `bannerImage: NSImage?`, `isCustomBanner: Bool`, `boardsTint: RGB`, `bookChipImage: NSImage?`, `menuBooks: [DashboardBook]`, `isAutomaticSelected: Bool`, `selectedBookID: String?`, `onSelectAutomatic: () -> Void`, `onSelectBook: (DashboardBook) -> Void`, `onAddBook: () -> Void`, `onManageBooks: () -> Void`.
+  - `DashboardHeroCard` gains inputs: `book: DashboardBook?`, `progressRatio: Double`, `bannerImage: NSImage?`, `isCustomBanner: Bool`, `boardsTint: RGB`, `bookChipImage: NSImage?`, `menuBooks: [DashboardBook]`, `isAutomaticSelected: Bool`, `selectedBookID: String?`, `onSelectAutomatic: () -> Void`, `onSelectBook: (DashboardBook) -> Void`, `onAddBook: () -> Void`, `onManageBooks: () -> Void`.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
 @Test func customBannerBeatsCover()                  // customBannerExists true, coverCached true -> .customBanner
 @Test func missingBannerFileFallsBackToCover()       // book.customBannerFile set but customBannerExists false, cover cached -> .cover
-@Test func noCoverNoBannerIsNone()                   // -> .none (hero shows gradient + tinted boards)
+@Test func noCoverNoBannerUsesDefaultBanner()      // -> .defaultBanner (hero uses the mountains bitmap as art)
 @Test func removingBannerFallsBackToCover()
 @Test func coverAlwaysBlurred()                      // blurRadius(isCustomBanner: false, ...) == BannerTreatment.coverBlurRadius (≈10) for any pixel width
 @Test func highResCustomBannerIsSharp()              // pixelWidth 1600, artWidth 400, scale 2 -> 0 (1600 >= 1.5*400*2)
@@ -558,11 +558,11 @@ git commit -m "feat(dashboard): localize custom books strings, document opt-in l
 
 - [ ] **Step 1: Full automated pass** — `xcodebuild ... test -only-testing:VoiceInkTests`; expected `** TEST SUCCEEDED **`.
 
-- [ ] **Step 2: Open-book visual** at 0 %, 1/6, 50 %, 99 %, 100 % and 250 % of the selected book (use a custom book with a small override word count to reach each state). Expect: 100 of 600 pages looks ≈ 1/6 on the left; ≥ 100 % shows no right stack plus the ribbon and "All N pages dictated" / "N×" caption; caption reads "~100 of 600 pages dictated" at 1/6.
+- [ ] **Step 2: Grid reveal visual** at 0 %, 10 %, 60 %, 100 % and 250 % of the selected book (use a custom book with a small override word count to reach each state). Expect: dictated cells in full colour, the rest muted, the next cell partial; 100 of 600 pages ≈ 1/6 of the cells; ≥ 100 % shows all cells, a green check and "All N pages dictated" / "N×"; caption reads "~100 of 600 pages dictated" at 1/6.
 
 - [ ] **Step 3: Banner art** with an Open Library cover (blurred), a high-res custom banner (sharp), a tiny custom banner (light blur), a very light and a very dark cover. Expect headline and subtitle readable at several window widths; fade into the beige is smooth.
 
-- [ ] **Step 4: Fallbacks and layout.** No cover and no banner → beige gradient plus tinted boards. Narrow window (< ~620 pt) → art and book drop, copy untruncated. Locked insights state → blur/desaturation as before, book hidden.
+- [ ] **Step 4: Fallbacks and layout.** No cover and no banner → the mountains bitmap as art (with the grid). Copy untruncated at every width. Locked insights state → art blurred/washed, no grid.
 
 - [ ] **Step 5: Add flow.** Search "Dune" online → pick → added, selected, cover arrives later without a spinner in the hero. Pick an already-added result → "Already added", disabled. Wi-Fi off → "Can't reach Open Library…" with **Add manually…** and **Retry**; add manually with "82500". A result without pages → Google fallback, else the word-count field.
 
@@ -578,7 +578,7 @@ git commit -m "feat(dashboard): localize custom books strings, document opt-in l
 
 ## Self-Review
 
-**Spec coverage.** §1-4 (intent, goals, anti-goals) → constraints and Tasks 1-9; §5 constraints → Global Constraints; §6 Decisions 1-9 → Tasks 1 (Automatic, built-ins), 3 (search, Google), 7 (add, banner step), 8 (hide/delete/override/banner rows), 9 (hero art, open book in front, locked state), 10 (README, localization); §7 → Task 3 and constant test; §8.1 → T1; §8.2 → T2; §8.3 services → T3/T4/T5; §8.4 flows → T7/T8/T9 (chip + menu), selection resolution → T1/T9; §8.5 text → T1/T9; §8.6 → T9; §8.7 → T6; §8.8 offline/caching → T4/T9/T11; §9 files → covered, plus asset removal and README in T10; §10 tests → each named suite appears in its task (`DashboardBookResolutionTests`, `DashboardBenchmarkTextTests`, `BookEstimationTests`, `OpenBookGeometryTests`, `OpenLibrarySearchDecodingTests`, `DashboardBookStoreTests`, `BannerImageImporterTests`, `BannerSelectionTests`); manual QA → Task 11. §11 open questions are builder choices, not tasks (backup/export is explicitly out of scope).
+**Spec coverage.** §1-4 (intent, goals, anti-goals) → constraints and Tasks 1-9; §5 constraints → Global Constraints; §6 Decisions 1-9 → Tasks 1 (Automatic, built-ins), 3 (search, Google), 7 (add, banner step), 8 (hide/delete/override/banner rows), 9 (hero art, grid reveal over the art, locked state), 10 (README, localization); §7 → Task 3 and constant test; §8.1 → T1; §8.2 → T2; §8.3 services → T3/T4/T5; §8.4 flows → T7/T8/T9 (chip + menu), selection resolution → T1/T9; §8.5 text → T1/T9; §8.6 → T9; §8.7 → `ProgressGrid` (round 3, replaced T6); §8.8 offline/caching → T4/T9/T11; §9 files → covered, plus asset removal and README in T10; §10 tests → each named suite appears in its task (`DashboardBookResolutionTests`, `DashboardBenchmarkTextTests`, `BookEstimationTests`, `OpenBookGeometryTests`, `OpenLibrarySearchDecodingTests`, `DashboardBookStoreTests`, `BannerImageImporterTests`, `BannerSelectionTests`); manual QA → Task 11. §11 open questions are builder choices, not tasks (backup/export is explicitly out of scope).
 
 **Step scan.** Tests give names and assertions with spec values; code steps give signatures and the algorithm only where not determined (resolution, importer pipeline, geometry). No "TBD"/"handle edge cases" steps. One deliberate carve-out: Task 6 Step 6 previews are conditional on repo norms.
 

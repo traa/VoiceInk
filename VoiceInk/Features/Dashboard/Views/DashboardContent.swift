@@ -689,11 +689,8 @@ struct DashboardContent: View {
             reviewCorrectionCount: dashboardReviewCorrectionCount,
             hasLoadedStats: hasLoadedStatsSnapshot,
             book: resolved?.book,
-            progress: resolved.map {
-                DashboardProgressBenchmark.progress(words: statsSummary.totalWords, book: $0.book)
-            } ?? 0,
             progressRatio: resolved.map {
-                DashboardProgressBenchmark.openBookRatio(
+                DashboardProgressBenchmark.revealRatio(
                     words: statsSummary.totalWords,
                     book: $0.book,
                     allowsRepeats: $0.allowsRepeats
@@ -735,7 +732,7 @@ struct DashboardContent: View {
     }
 
     private struct BannerArt {
-        var image: NSImage?
+        var image: NSImage? = BannerTreatment.defaultBannerImage
         var isCustomBanner = false
         var coverImage: NSImage?
         var usesDefaultBanner = true

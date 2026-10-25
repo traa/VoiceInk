@@ -11,6 +11,11 @@ struct DashboardHeroCard: View {
     private static let headlineFont: Font = .system(size: 23, weight: .bold, design: .rounded)
     private static let highlightedHeadlineFont: Font = .system(size: 30, weight: .black, design: .rounded)
 
+    /// The headline and subtitle wrap at about the width left of the banner art (the art starts ~45 % into the
+    /// ~682 pt card), so the copy only touches the art's faded left edge.
+    private static let headlineMaxWidth: CGFloat = 330
+    private static let subtitleMaxWidth: CGFloat = 270
+
     let isLocked: Bool
     let headline: DashboardHeroHeadline
     let subtext: String
@@ -22,14 +27,13 @@ struct DashboardHeroCard: View {
     let reviewCorrectionCount: Int?
     let hasLoadedStats: Bool
     let book: DashboardBook?
-    /// Clamped progress `P` (0...1) of the resolved book.
-    let progress: Double
-    /// Unclamped for repeats-allowed books, clamped otherwise (see `DashboardProgressBenchmark.openBookRatio`).
+    /// Unclamped for repeats-allowed books, clamped otherwise (see `DashboardProgressBenchmark.revealRatio`).
     let progressRatio: Double
+    /// The art drawn on the right: cover, custom banner, or (with `usesDefaultBanner`) the default bitmap.
     let bannerImage: NSImage?
-    /// No cover/custom banner: draw the original bitmap as the full-card background.
     let usesDefaultBanner: Bool
     let isCustomBanner: Bool
+    /// Tint of the chip's placeholder thumbnail.
     let boardsTint: RGB
     let bookChipImage: NSImage?
     /// Cached cover (or banner) for a menu row; disk/memory only, never fetched. Nil draws the tinted placeholder.
@@ -47,99 +51,42 @@ struct DashboardHeroCard: View {
     let onReviewCorrections: () -> Void
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            // Tier 1 (wide): banner art + open book. No ideal-width override: the wide variant's ideal
-            // width is copy (wraps freely) + book, so it is only chosen when the book fits unsqueezed.
-            cardContent(showsBook: artPlan(tierShowsBook: true).drawsBook)
-                .background(alignment: .trailing) { artLayer(plan: artPlan(tierShowsBook: true)) }
-                .frame(minWidth: BannerTreatment.minimumCardWidth, maxWidth: .infinity, alignment: .leading)
-
-            // Tier 2 (narrower): the book is dropped, the banner art stays (when there is one).
-            // Tier 3 (no art source): plain gradient, drawn by `DashboardImpactBackground`.
-            cardContent(showsBook: false)
-                .background(alignment: .trailing) { artLayer(plan: artPlan(tierShowsBook: false)) }
-        }
-        .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
-        .background(DashboardImpactBackground(isLocked: isLocked, usesDefaultBanner: usesDefaultBanner))
-        .clipShape(RoundedRectangle(cornerRadius: DashboardLayout.cardCornerRadius, style: .continuous))
+        cardContent
+            .background(alignment: .trailing) { artLayer }
+            .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
+            .background(DashboardImpactBackground(isLocked: isLocked))
+            .clipShape(RoundedRectangle(cornerRadius: DashboardLayout.cardCornerRadius, style: .continuous))
     }
 
-    private func artPlan(tierShowsBook: Bool) -> BannerTreatment.ArtPlan {
-        BannerTreatment.artPlan(
-            isLocked: isLocked,
-            hasBook: book != nil,
-            hasArtImage: bannerImage != nil,
-            tierShowsBook: tierShowsBook
-        )
-    }
-
-    /// The open book is drawn at 80 % so copy + book fit the app's fixed 950 pt window (hero ≈ 682 pt).
-    private static let bookScale: CGFloat = 0.8
-
-    /// Centre of the open book from the card's trailing edge: card padding (28) + half the scaled book.
-    private static let bookCenterInset: CGFloat = 28 + 240 * bookScale / 2
-
+    /// Banner art on the right ~55 % of the card. With a book (and not locked) it carries the progress grid.
     @ViewBuilder
-    private func artLayer(plan: BannerTreatment.ArtPlan) -> some View {
-        if plan.drawsBook || plan.drawsArt {
+    private var artLayer: some View {
+        if let bannerImage {
             GeometryReader { proxy in
-                let width = proxy.size.width
-                let height = proxy.size.height
-                ZStack(alignment: .topLeading) {
-                    if plan.drawsArt, let bannerImage {
-                        let artWidth = width * BannerTreatment.artWidthFraction
-                        DashboardBookBannerArt(
-                            image: bannerImage,
-                            isCustomBanner: isCustomBanner,
-                            washOpacity: plan.washOpacity,
-                            isLocked: plan.artIsLocked
-                        )
-                            .frame(width: artWidth, height: height)
-                            .offset(x: width - artWidth)
-                    }
-
-                    if plan.drawsBook {
-                        // Soft light pool behind the book and its caption: separates the cream pages from the
-                        // gradient (no art) and keeps the caption legible over any art.
-                        RadialGradient(
-                            colors: [Color.white.opacity(bannerImage == nil ? 0.45 : 0.62), Color.white.opacity(0)],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 190
-                        )
-                        .frame(width: 380, height: 380)
-                        .position(x: width - Self.bookCenterInset, y: height / 2)
-                    }
-                }
-                .frame(width: width, height: height)
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
-    }
-
-    private func cardContent(showsBook: Bool) -> some View {
-        HStack(alignment: .center, spacing: 20) {
-            copyColumn
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if showsBook, let book {
-                DashboardOpenBookView(
-                    progress: hasLoadedStats ? progress : 0,
-                    ratio: hasLoadedStats ? progressRatio : 0,
-                    totalPages: book.pagesEquivalent,
-                    title: book.displayTitle,
-                    boardsTint: boardsTint,
+                let artWidth = proxy.size.width * BannerTreatment.artWidthFraction
+                DashboardBookBannerArt(
+                    image: bannerImage,
+                    isCustomBanner: isCustomBanner,
+                    isDefaultBanner: usesDefaultBanner,
+                    isLocked: isLocked,
+                    reveal: book.map {
+                        BookRevealInput(totalPages: $0.pagesEquivalent, ratio: hasLoadedStats ? progressRatio : 0)
+                    },
                     showsCaption: hasLoadedStats
                 )
-                .fixedSize()
-                .scaleEffect(Self.bookScale)
-                .frame(width: 240 * Self.bookScale, height: 140 * Self.bookScale)
+                .frame(width: artWidth, height: proxy.size.height)
+                .offset(x: proxy.size.width - artWidth)
             }
+            .allowsHitTesting(false)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
+    }
+
+    private var cardContent: some View {
+        copyColumn
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
     }
 
     private var copyColumn: some View {
@@ -272,12 +219,12 @@ struct DashboardHeroCard: View {
     private var heroCopy: some View {
         VStack(alignment: .leading, spacing: 10) {
             headlineText
-                .frame(idealWidth: 200, maxWidth: 720, alignment: .leading)
+                .frame(idealWidth: 200, maxWidth: Self.headlineMaxWidth, alignment: .leading)
 
             Text(subtext)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(DashboardMomentumBackground.subtext)
-                .frame(idealWidth: 200, maxWidth: 620, alignment: .leading)
+                .frame(idealWidth: 200, maxWidth: Self.subtitleMaxWidth, alignment: .leading)
         }
     }
 
@@ -504,28 +451,18 @@ private struct DashboardBookChipLabel: View {
 
 private struct DashboardImpactBackground: View {
     var isLocked = false
-    /// True: the original full-card low-poly bitmap. False: the beige gradient (banner art is drawn above it).
-    var usesDefaultBanner = false
 
     var body: some View {
         ZStack {
-            if usesDefaultBanner {
-                Image("momentum-hero-bg")
-                    .resizable()
-                    .scaledToFill()
-                    .blur(radius: isLocked ? BannerTreatment.lockedExtraBlurRadius : 0)
-                    .saturation(isLocked ? BannerTreatment.lockedSaturation : 1)
-            } else {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.98, green: 0.85, blue: 0.74),
-                        Color(red: 0.99, green: 0.91, blue: 0.83),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .trailing
-                )
-                .saturation(isLocked ? BannerTreatment.lockedSaturation : 1)
-            }
+            LinearGradient(
+                colors: [
+                    Color(red: 0.98, green: 0.85, blue: 0.74),
+                    Color(red: 0.99, green: 0.91, blue: 0.83),
+                ],
+                startPoint: .topLeading,
+                endPoint: .trailing
+            )
+            .saturation(isLocked ? BannerTreatment.lockedSaturation : 1)
 
             if isLocked {
                 Color.white.opacity(BannerTreatment.lockedWhiteOverlayOpacity)
@@ -539,7 +476,7 @@ private struct DashboardImpactBackground: View {
     }
 }
 
-struct DashboardMomentumBackground {
+private struct DashboardMomentumBackground {
     static let accent = Color(red: 0.76, green: 0.31, blue: 0.08)
     static let headline = Color(red: 0.10, green: 0.08, blue: 0.06)
     static let subtext = Color(red: 0.40, green: 0.34, blue: 0.28)
