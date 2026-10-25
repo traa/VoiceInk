@@ -106,4 +106,26 @@ struct BookCoverCacheTests {
         #expect(!FileManager.default.fileExists(atPath: cache.fileURL(for: 42).path))
         #expect(cache.cachedImage(for: 42) == nil)
     }
+
+    @Test func removeCoverDeletesFileAndEvictsMemory() throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let requests = StubLockedBox(0)
+        let cache = cache(directory: directory) { request in
+            requests.value += 1
+            return (StubURLProtocol.response(for: request, status: 500), Data())
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Self.pngData().write(to: cache.fileURL(for: 42))
+        try Self.pngData().write(to: cache.fileURL(for: 43))
+        #expect(cache.cachedImage(for: 42) != nil)  // now also in memory
+
+        cache.removeCover(for: 42)
+
+        #expect(!FileManager.default.fileExists(atPath: cache.fileURL(for: 42).path))
+        #expect(cache.cachedImage(for: 42) == nil)
+        #expect(cache.cachedImage(for: 43) != nil)
+        cache.removeCover(for: 99)  // missing cover is a no-op
+        #expect(requests.value == 0)
+    }
 }

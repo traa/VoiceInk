@@ -40,6 +40,12 @@ final class BookCoverCache: @unchecked Sendable {
         return image
     }
 
+    /// Deletes the cached cover file and evicts the in-memory entry. A missing cover is a no-op.
+    func removeCover(for coverID: Int) {
+        memory.removeObject(forKey: NSNumber(value: coverID))
+        try? FileManager.default.removeItem(at: fileURL(for: coverID))
+    }
+
     func image(for coverID: Int) async -> NSImage? {
         if let image = cachedImage(for: coverID) { return image }
 
