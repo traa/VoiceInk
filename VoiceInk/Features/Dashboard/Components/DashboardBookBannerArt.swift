@@ -36,8 +36,11 @@ enum BannerTreatment {
     /// The mountains bitmap is zoomed toward its top-right so its plain beige left side is cropped away.
     static let defaultBannerZoom: CGFloat = 1.3
     /// Share of the art's width over which un-gridded art (locked, or no book) dissolves into the beige
-    /// gradient on its left edge. The grid reveal itself has a clean edge: cells never sit in a fade.
+    /// gradient on its left edge (the locked prompt overlaps the art).
     static let leftFadeFraction: CGFloat = 0.25
+    /// Width in points of the left fade of the grid reveal. The mask covers muted base, full-colour cells and
+    /// hairlines together, so the whole grid dissolves into the beige card (no hard edge).
+    static let gridFadeWidth: CGFloat = 32
     /// Locked insights state (spec §8.6 item 5): blur added on top of the art's own blur logic,
     /// plus the same desaturation and white veil the old bitmap background got.
     static let lockedExtraBlurRadius: CGFloat = 2.5
@@ -119,7 +122,7 @@ struct DashboardBookBannerArt: View {
                 }
             }
             .frame(width: size.width, height: size.height)
-            .mask { if showsGrid { Color.black } else { fadeMask } }
+            .mask(fadeMask(artWidth: size.width))
             .accessibilityHidden(true)
             .overlay(alignment: .bottomTrailing) {
                 if let reveal, showsGrid, showsCaption {
@@ -193,11 +196,14 @@ struct DashboardBookBannerArt: View {
         }
     }
 
-    private var fadeMask: some View {
-        LinearGradient(
+    private func fadeMask(artWidth: CGFloat) -> some View {
+        let fraction = showsGrid
+            ? min(BannerTreatment.gridFadeWidth / max(artWidth, 1), 0.5)
+            : BannerTreatment.leftFadeFraction
+        return LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
-                .init(color: .black, location: BannerTreatment.leftFadeFraction),
+                .init(color: .black, location: fraction),
                 .init(color: .black, location: 1),
             ],
             startPoint: .leading,
