@@ -928,20 +928,28 @@ struct DashboardContent: View {
     }
 
     private var formattedProgressBenchmarkText: String {
-        switch DashboardProgressBenchmark.equivalence(for: statsSummary.totalWords) {
+        let resolved = DashboardProgressBenchmark.resolveBook(
+            words: statsSummary.totalWords,
+            visible: DashboardProgressBenchmark.builtInBooks,
+            selectedID: nil
+        )
+
+        switch DashboardProgressBenchmark.equivalence(
+            for: statsSummary.totalWords,
+            book: resolved?.book,
+            allowsRepeats: resolved?.allowsRepeats ?? false
+        ) {
         case .matched(let title):
             return String(localized: "Dictated \(formattedAllTimeWords), equivalent to \(title).")
         case .repeated(let title, let count):
             return String(
                 localized:
                     "Dictated \(formattedAllTimeWords), equivalent to \(title) \(formattedBenchmarkMultiple(count)).")
-        case .remaining(let words, let title):
-            guard words > 0, !title.isEmpty else {
-                return String(localized: "Dictated \(formattedAllTimeWords).")
-            }
-
+        case .remaining(let words, let title, _):
             let remainingWords = Formatters.formattedNumber(words)
             return String(localized: "Dictated \(formattedAllTimeWords), \(remainingWords) words from \(title).")
+        case .none:
+            return String(localized: "Dictated \(formattedAllTimeWords).")
         }
     }
 

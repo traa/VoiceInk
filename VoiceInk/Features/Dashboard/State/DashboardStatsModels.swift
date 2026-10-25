@@ -417,57 +417,97 @@ enum DashboardTimeSaving {
     }
 }
 
+struct ResolvedBook: Equatable {
+    let book: DashboardBook
+    let allowsRepeats: Bool
+}
+
 enum DashboardProgressBenchmark {
-    enum Equivalence {
+    enum Equivalence: Equatable {
         case matched(title: String)
         case repeated(title: String, count: Int)
-        case remaining(words: Int, title: String)
+        case remaining(words: Int, title: String, isEstimate: Bool)
+        case none
     }
 
-    private struct Milestone {
-        let title: LocalizedStringResource
-        let wordCount: Int
-
-        var localizedTitle: String {
-            String(localized: title)
-        }
-    }
-
-    private static let repeatBenchmark = Milestone(
-        title: "Tolstoy's War and Peace",
-        wordCount: 700_000
-    )
-
-    private static let oneTimeMilestones = [
-        Milestone(title: "The Metamorphosis", wordCount: 21_180),
-        Milestone(title: "Animal Farm", wordCount: 29_966),
-        Milestone(title: "The Great Gatsby", wordCount: 47_094),
-        Milestone(title: "Homer's Iliad", wordCount: 114_715),
-        Milestone(title: "Homer's Odyssey", wordCount: 121_365),
-        Milestone(title: "Homer's Iliad and Odyssey", wordCount: 236_080),
+    static let builtInBooks: [DashboardBook] = [
+        builtIn("builtin.metamorphosis", title: "The Metamorphosis", author: "Kafka", wordCount: 21_180),
+        builtIn("builtin.animal-farm", title: "Animal Farm", author: "Orwell", wordCount: 29_966),
+        builtIn("builtin.great-gatsby", title: "The Great Gatsby", author: "Fitzgerald", wordCount: 47_094),
+        builtIn("builtin.iliad", title: "Homer's Iliad", author: "Homer", wordCount: 114_715),
+        builtIn("builtin.odyssey", title: "Homer's Odyssey", author: "Homer", wordCount: 121_365),
+        builtIn("builtin.iliad-odyssey", title: "Homer's Iliad and Odyssey", author: "Homer", wordCount: 236_080),
+        builtIn("builtin.war-and-peace", title: "Tolstoy's War and Peace", author: "Tolstoy", wordCount: 700_000),
     ]
 
-    static func equivalence(for words: Int) -> Equivalence {
-        if words >= repeatBenchmark.wordCount {
-            let wholeMultiple = words / repeatBenchmark.wordCount
+    private static func builtIn(
+        _ id: String,
+        title: String,
+        author: String,
+        wordCount: Int
+    ) -> DashboardBook {
+        DashboardBook(
+            id: id,
+            kind: .builtIn,
+            title: title,
+            author: author,
+            wordCount: wordCount,
+            wordCountSource: .curated,
+            estimatedWordCount: nil,
+            pageCount: nil,
+            openLibraryWorkKey: nil,
+            coverID: nil,
+            coverTint: nil,
+            customBannerFile: nil,
+            addedAt: Date(timeIntervalSince1970: 0)
+        )
+    }
 
-            if wholeMultiple >= 2 {
-                return .repeated(title: repeatBenchmark.localizedTitle, count: wholeMultiple)
-            }
+    private static func sortedByWordCount(_ books: [DashboardBook]) -> [DashboardBook] {
+        books.sorted { ($0.wordCount, $0.id) < ($1.wordCount, $1.id) }
+    }
 
-            return .matched(title: repeatBenchmark.localizedTitle)
+    static func resolveBook(words: Int, visible: [DashboardBook], selectedID: String?) -> ResolvedBook? {
+        let sorted = sortedByWordCount(visible)
+
+        if let selectedID, !selectedID.isEmpty,
+            let selected = sorted.first(where: { $0.id == selectedID })
+        {
+            return ResolvedBook(book: selected, allowsRepeats: true)
         }
 
-        if let milestone = oneTimeMilestones.last(where: { words >= $0.wordCount }) {
-            return .matched(title: milestone.localizedTitle)
+        guard let first = sorted.first, let last = sorted.last else { return nil }
+        let book = sorted.last(where: { words >= $0.wordCount }) ?? first
+        return ResolvedBook(book: book, allowsRepeats: book.id == last.id)
+    }
+
+    static func isSelectionStale(selectedID: String?, visible: [DashboardBook]) -> Bool {
+        guard let selectedID, !selectedID.isEmpty else { return false }
+        return !visible.contains { $0.id == selectedID }
+    }
+
+    static func progress(words: Int, book: DashboardBook) -> Double {
+        guard book.wordCount > 0 else { return 0 }
+        return min(1, max(0, Double(words) / Double(book.wordCount)))
+    }
+
+    static func equivalence(for words: Int, book: DashboardBook?, allowsRepeats: Bool) -> Equivalence {
+        guard let book, book.wordCount > 0 else { return .none }
+
+        if words < book.wordCount {
+            return .remaining(
+                words: book.wordCount - words,
+                title: book.displayTitle,
+                isEstimate: book.isEstimate
+            )
         }
 
-        guard let firstMilestone = oneTimeMilestones.first else {
-            return .remaining(words: 0, title: "")
+        let wholeMultiple = words / book.wordCount
+        if allowsRepeats, wholeMultiple >= 2 {
+            return .repeated(title: book.displayTitle, count: wholeMultiple)
         }
 
-        let remainingWords = firstMilestone.wordCount - words
-        return .remaining(words: remainingWords, title: firstMilestone.localizedTitle)
+        return .matched(title: book.displayTitle)
     }
 }
 
