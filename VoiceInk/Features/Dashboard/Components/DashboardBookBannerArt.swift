@@ -64,9 +64,10 @@ enum BannerTreatment {
 struct DashboardBookBannerArt: View {
     let image: NSImage
     let isCustomBanner: Bool
+    /// Extra beige wash over the graded art. Used when the copy overlaps the art (no open book tier).
+    var washOpacity: Double = 0
 
     @Environment(\.displayScale) private var displayScale
-
     var body: some View {
         GeometryReader { proxy in
             let blur = BannerTreatment.blurRadius(
@@ -87,6 +88,7 @@ struct DashboardBookBannerArt: View {
                 }
                 .overlay(Color(red: 1.0, green: 0.86, blue: 0.68).opacity(0.20))
                 .overlay(Color.white.opacity(0.10))
+                .overlay(Color(red: 0.98, green: 0.88, blue: 0.78).opacity(washOpacity))
                 .clipped()
                 .mask(
                     LinearGradient(

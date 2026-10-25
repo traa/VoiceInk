@@ -44,14 +44,16 @@ struct DashboardHeroCard: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            // Wide: banner art on the right with the open book in front. No ideal-width override: the
-            // copy column's ideal width is the button row (text frames below have a small ideal width),
-            // so this variant is only chosen when the buttons and book fit unsqueezed.
+            // Tier 1 (wide): banner art + open book. No ideal-width override: the wide variant's ideal
+            // width is copy (wraps freely) + book, so it is only chosen when the book fits unsqueezed.
             cardContent(showsBook: showsBookArt)
-                .background(alignment: .trailing) { artLayer }
+                .background(alignment: .trailing) { artLayer(showsBook: showsBookArt) }
                 .frame(minWidth: BannerTreatment.minimumCardWidth, maxWidth: .infinity, alignment: .leading)
 
+            // Tier 2 (narrower): the book is dropped, the banner art stays (when there is one).
+            // Tier 3 (no art source): plain gradient, drawn by `DashboardImpactBackground`.
             cardContent(showsBook: false)
+                .background(alignment: .trailing) { artLayer(showsBook: false) }
         }
         .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
         .background(DashboardImpactBackground(isLocked: isLocked))
@@ -62,33 +64,42 @@ struct DashboardHeroCard: View {
         !isLocked && book != nil
     }
 
-    /// Centre of the open book from the card's trailing edge: card padding (28) + half the book (120).
-    private static let bookCenterInset: CGFloat = 148
+    /// The open book is drawn at 80 % so copy + book fit the app's fixed 950 pt window (hero ≈ 682 pt).
+    private static let bookScale: CGFloat = 0.8
+
+    /// Centre of the open book from the card's trailing edge: card padding (28) + half the scaled book.
+    private static let bookCenterInset: CGFloat = 28 + 240 * bookScale / 2
 
     @ViewBuilder
-    private var artLayer: some View {
-        if showsBookArt {
+    private func artLayer(showsBook: Bool) -> some View {
+        if showsBookArt, showsBook || bannerImage != nil {
             GeometryReader { proxy in
                 let width = proxy.size.width
                 let height = proxy.size.height
                 ZStack(alignment: .topLeading) {
                     if let bannerImage {
                         let artWidth = width * BannerTreatment.artWidthFraction
-                        DashboardBookBannerArt(image: bannerImage, isCustomBanner: isCustomBanner)
+                        DashboardBookBannerArt(
+                            image: bannerImage,
+                            isCustomBanner: isCustomBanner,
+                            washOpacity: showsBook ? 0 : 0.5
+                        )
                             .frame(width: artWidth, height: height)
                             .offset(x: width - artWidth)
                     }
 
-                    // Soft light pool behind the book and its caption: separates the cream pages from the
-                    // gradient (no art) and keeps the caption legible over any art.
-                    RadialGradient(
-                        colors: [Color.white.opacity(bannerImage == nil ? 0.45 : 0.62), Color.white.opacity(0)],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 190
-                    )
-                    .frame(width: 380, height: 380)
-                    .position(x: width - Self.bookCenterInset, y: height / 2)
+                    if showsBook {
+                        // Soft light pool behind the book and its caption: separates the cream pages from the
+                        // gradient (no art) and keeps the caption legible over any art.
+                        RadialGradient(
+                            colors: [Color.white.opacity(bannerImage == nil ? 0.45 : 0.62), Color.white.opacity(0)],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 190
+                        )
+                        .frame(width: 380, height: 380)
+                        .position(x: width - Self.bookCenterInset, y: height / 2)
+                    }
                 }
                 .frame(width: width, height: height)
             }
@@ -112,6 +123,8 @@ struct DashboardHeroCard: View {
                     showsCaption: hasLoadedStats
                 )
                 .fixedSize()
+                .scaleEffect(Self.bookScale)
+                .frame(width: 240 * Self.bookScale, height: 140 * Self.bookScale)
             }
         }
         .padding(.horizontal, 28)
@@ -127,7 +140,7 @@ struct DashboardHeroCard: View {
                 heroCopy
             }
 
-            HStack(spacing: 12) {
+            HeroButtonFlow(spacing: 12, lineSpacing: 10) {
                 Button(action: onViewInsights) {
                     DashboardMomentumActionLabel(
                         title: actionTitle,
@@ -477,4 +490,48 @@ struct DashboardMomentumBackground {
     static let accent = Color(red: 0.76, green: 0.31, blue: 0.08)
     static let headline = Color(red: 0.10, green: 0.08, blue: 0.06)
     static let subtext = Color(red: 0.40, green: 0.34, blue: 0.28)
+}
+
+/// Left-to-right row that wraps onto further lines instead of squeezing its children. With no width
+/// proposal it reports the size wrapped at `idealWrapWidth` (about the two action buttons), so the
+/// hero's wide variant does not demand the full single-line width.
+private struct HeroButtonFlow: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+    static let idealWrapWidth: CGFloat = 340
+
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> (positions: [CGPoint], size: CGSize) {
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var maxX: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+            maxX = max(maxX, x - spacing)
+        }
+        return (positions, CGSize(width: maxX, height: y + lineHeight))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(subviews, width: proposal.width ?? Self.idealWrapWidth).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(subviews, width: bounds.width)
+        for (subview, position) in zip(subviews, result.positions) {
+            subview.place(
+                at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
+                proposal: .unspecified
+            )
+        }
+    }
 }
