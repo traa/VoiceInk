@@ -477,7 +477,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ — ca. %2$@ Wörter"
+            "value" : "%1$@ — ~%2$@ Wörter"
           }
         },
         "en" : {
@@ -489,13 +489,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ — env. %2$@ mots"
+            "value" : "%1$@ — ~%2$@ mots"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ — 约 %2$@ 字"
+            "value" : "%1$@ — ~%2$@ 字"
           }
         }
       }
@@ -6907,7 +6907,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Livre de comparaison de la progression"
+            "value" : "Livre servant de référence pour la progression"
           }
         },
         "zh-Hans" : {
@@ -10561,7 +10561,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ diktiert, ca. %2$@ Wörter von %3$@ entfernt."
+            "value" : "%1$@ diktiert, ~%2$@ Wörter von %3$@ entfernt."
           }
         },
         "en" : {
@@ -10573,13 +10573,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dicté %1$@, environ %2$@ mots avant %3$@."
+            "value" : "Dicté %1$@, ~%2$@ mots avant %3$@."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已听写 %1$@，还差约 %2$@ 字即可达到 %3$@。"
+            "value" : "已听写 %1$@，还差 ~%2$@ 字即可达到 %3$@。"
           }
         }
       }
@@ -32587,7 +32587,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已听写约 %1$@ / %2$@ 页"
+            "value" : "已听写 ~%1$@ / %2$@ 页"
           }
         }
       }
@@ -32598,7 +32598,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ca. %@ Wörter"
+            "value" : "~%@ Wörter"
           }
         },
         "en" : {
@@ -32610,13 +32610,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "env. %@ mots"
+            "value" : "~%@ mots"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "约 %@ 字"
+            "value" : "~%@ 字"
           }
         }
       }

@@ -105,6 +105,8 @@ struct LocalizationCoverageTests {
                 let unit = (localizations[language] as? [String: Any])?["stringUnit"] as? [String: Any]
                 guard let value = unit?["value"] as? String else { continue }
                 #expect(Self.specifiers(in: value) == expected, "\(language) translation of \(key) changes its format specifiers: \(value)")
+                #expect(key.contains("~") == value.contains("~"), "\(language) translation of \(key) must keep the \"~\" estimate marker exactly: \(value)")
+                #expect(key.contains("×") == value.contains("×"), "\(language) translation of \(key) must keep \"×\": \(value)")
             }
         }
     }
