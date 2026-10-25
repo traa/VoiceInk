@@ -229,7 +229,7 @@ private struct DashboardImpactBackground: View {
     }
 }
 
-private struct DashboardMomentumBackground {
+struct DashboardMomentumBackground {
     static let accent = Color(red: 0.76, green: 0.31, blue: 0.08)
     static let headline = Color(red: 0.10, green: 0.08, blue: 0.06)
     static let subtext = Color(red: 0.40, green: 0.34, blue: 0.28)
