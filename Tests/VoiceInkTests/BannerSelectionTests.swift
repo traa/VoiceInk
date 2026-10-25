@@ -60,9 +60,29 @@ struct BannerSelectionTests {
         #expect(source.kind == .cover)
     }
 
-    @Test func noCoverNoBannerIsNone() {
-        #expect(BookArtSource.resolve(book: book(coverID: nil), customBannerExists: false, coverCached: false).kind == .none)
-        #expect(BookArtSource.resolve(book: book(), customBannerExists: false, coverCached: false).kind == .none)
+    @Test func noCoverNoBannerUsesDefaultBanner() {
+        #expect(BookArtSource.resolve(book: book(coverID: nil), customBannerExists: false, coverCached: false).kind == .defaultBanner)
+        #expect(BookArtSource.resolve(book: book(), customBannerExists: false, coverCached: false).kind == .defaultBanner)
+    }
+
+    @Test func noBookUsesDefaultBanner() {
+        #expect(BookArtSource.resolve(book: nil, customBannerExists: false, coverCached: false).kind == .defaultBanner)
+    }
+
+    @Test func everyBuiltInWithoutArtUsesDefaultBanner() {
+        for builtIn in DashboardProgressBenchmark.builtInBooks {
+            #expect(BookArtSource.resolve(book: builtIn, customBannerExists: false, coverCached: false).kind == .defaultBanner)
+        }
+    }
+
+    @Test func builtInWithCustomBannerUsesIt() {
+        var builtIn = DashboardProgressBenchmark.builtInBooks[0]
+        builtIn.customBannerFile = "\(builtIn.id).jpg"
+        #expect(BookArtSource.resolve(book: builtIn, customBannerExists: true, coverCached: false).kind == .customBanner)
+    }
+
+    @Test func coverIDWithoutCachedCoverUsesDefaultBanner() {
+        #expect(BookArtSource.resolve(book: book(coverID: 42), customBannerExists: false, coverCached: false).kind == .defaultBanner)
     }
 
     @Test func removingBannerFallsBackToCover() throws {

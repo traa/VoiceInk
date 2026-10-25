@@ -499,7 +499,7 @@ git commit -m "feat(dashboard): add Manage Books panel"
 
 - [ ] **Step 4: Implement `DashboardBookBannerArt`**: image `.scaledToFill()` clipped, over-scaled ≈ 1.15× when blurred, horizontal `LinearGradient` mask (clear → opaque by ~40 % of its width), `saturation(0.85)`, warm overlay `Color(red: 1.0, green: 0.86, blue: 0.68)` ≈ 0.20, white veil ≈ 0.10.
 
-- [ ] **Step 5: Rework `DashboardImpactBackground` and `DashboardHeroCard`** per §8.6: remove `Image("momentum-hero-bg")`; beige `LinearGradient` `(0.98, 0.85, 0.74)` → `(0.99, 0.91, 0.83)` plus soft radial highlight when no art; art frame on the right ~55 %; foreground `HStack` with copy left and `DashboardOpenBookView` right, in front; `ViewThatFits` drops art and book under 620 pt; locked state applies `blur(2.5)`/`saturation(0.78)`/white 0.32 to the background stack and hides the book; book chip in the button row (16×22 cover thumbnail, title ≤ ~180 pt, chevron) opening a `Menu`: **Automatic** (checkmark, no subtitle), divider, visible books ascending by word count (`Title — 21,180 words` / `~90,200 words`, checkmark on selected), divider, **Add Book…**, **Manage Books…**; chip hidden when locked. Author's call from spec: if cluttered, drop the chip thumbnail image only.
+- [ ] **Step 5: Rework `DashboardImpactBackground` and `DashboardHeroCard`** per §8.6: keep `Image("momentum-hero-bg")` for books without cover/banner (round-2 ruling, see spec §8.6; beige gradient + art only for books with art); beige `LinearGradient` `(0.98, 0.85, 0.74)` → `(0.99, 0.91, 0.83)` plus soft radial highlight when no art; art frame on the right ~55 %; foreground `HStack` with copy left and `DashboardOpenBookView` right, in front; `ViewThatFits` drops art and book under 620 pt; locked state applies `blur(2.5)`/`saturation(0.78)`/white 0.32 to the background stack and hides the book; book chip in the button row (16×22 cover thumbnail, title ≤ ~180 pt, chevron) opening a `Menu`: **Automatic** (checkmark, no subtitle), divider, visible books ascending by word count (`Title — 21,180 words` / `~90,200 words`, checkmark on selected), divider, **Add Book…**, **Manage Books…**; chip hidden when locked. Author's call from spec: if cluttered, drop the chip thumbnail image only.
 
 - [ ] **Step 6: Wire `DashboardContent`**: `@ObservedObject` `DashboardBookStore.shared`; `@AppStorage("dashboardSelectedBookID") private var selectedBookID = ""`; `@AppStorage("dashboardHiddenBuiltInBookIDs") private var hiddenBooks = HiddenBookIDs()`; compute `visible = store.allBooks(hiddenBuiltIns: hiddenBooks.ids)`, `resolved = resolveBook(...)`, `progress`/`ratio`, `art`/tint; on appear and on change, clear a stale selection (`isSelectionStale`) and start one non-blocking `Task` per session per book to `BookCoverCache.image(for:)` for the selected custom book when it has no custom banner, then `store.setCoverTint` (no retry after failure, silent). `formattedProgressBenchmarkText` gets the estimate variant ("Dictated %@, ~%@ words from %@.") and `.none`. Present `AddBookSheet` via `.sheet` (on add: set `selectedBookID`) and `ManageBooksPanel` via a new `.sidePanel(isPresented:)` alongside the existing four.
 
@@ -514,12 +514,12 @@ git commit -m "feat(dashboard): cover-derived banner art, open-book hero and boo
 
 ---
 
-### Task 10: Localization, README, asset removal
+### Task 10: Localization, README (asset removal was reversed in round 2: the asset is kept)
 
 **Files:**
 - Modify: `VoiceInk/Localizable.xcstrings`
 - Modify: `README.md` (under the "Privacy First" bullet, l.34)
-- Delete: `VoiceInk/Assets.xcassets/momentum-hero-bg.imageset/`
+- Keep: `VoiceInk/Assets.xcassets/momentum-hero-bg.imageset/` (originally deleted here; restored in round 2 as the default banner)
 - Test: `Tests/VoiceInkTests/LocalizationCoverageTests.swift`
 
 **Interfaces:**
@@ -534,7 +534,7 @@ git commit -m "feat(dashboard): cover-derived banner art, open-book hero and boo
 
 - [ ] **Step 4: Update `README.md`**: one short note under "Privacy First": transcription stays fully offline; dashboard book search (Open Library, and Google Books for page counts) and banner-by-URL are opt-in online lookups made only when the user uses them.
 
-- [ ] **Step 5: Delete `momentum-hero-bg.imageset`** and confirm no references remain: `grep -rn "momentum-hero-bg" VoiceInk` must print nothing.
+- [ ] **Step 5: ~~Delete `momentum-hero-bg.imageset`~~** Reversed in round 2: the imageset stays and is the default banner (`BookArtSource.defaultBanner`); `DashboardImpactBackground` references it.
 
 - [ ] **Step 6: Run tests and build** — suite `LocalizationCoverageTests` then the full `-only-testing:VoiceInkTests`; then the same command with `build`; expected `** TEST SUCCEEDED **` and `** BUILD SUCCEEDED **`.
 

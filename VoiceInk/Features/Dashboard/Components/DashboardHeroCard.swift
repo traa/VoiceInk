@@ -27,6 +27,8 @@ struct DashboardHeroCard: View {
     /// Unclamped for repeats-allowed books, clamped otherwise (see `DashboardProgressBenchmark.openBookRatio`).
     let progressRatio: Double
     let bannerImage: NSImage?
+    /// No cover/custom banner: draw the original bitmap as the full-card background.
+    let usesDefaultBanner: Bool
     let isCustomBanner: Bool
     let boardsTint: RGB
     let bookChipImage: NSImage?
@@ -56,7 +58,7 @@ struct DashboardHeroCard: View {
                 .background(alignment: .trailing) { artLayer(plan: artPlan(tierShowsBook: false)) }
         }
         .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
-        .background(DashboardImpactBackground(isLocked: isLocked))
+        .background(DashboardImpactBackground(isLocked: isLocked, usesDefaultBanner: usesDefaultBanner))
         .clipShape(RoundedRectangle(cornerRadius: DashboardLayout.cardCornerRadius, style: .continuous))
     }
 
@@ -467,21 +469,31 @@ private struct DashboardBookChipLabel: View {
 
 private struct DashboardImpactBackground: View {
     var isLocked = false
+    /// True: the original full-card low-poly bitmap. False: the beige gradient (banner art is drawn above it).
+    var usesDefaultBanner = false
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.98, green: 0.85, blue: 0.74),
-                    Color(red: 0.99, green: 0.91, blue: 0.83),
-                ],
-                startPoint: .topLeading,
-                endPoint: .trailing
-            )
-            .saturation(isLocked ? 0.78 : 1)
+            if usesDefaultBanner {
+                Image("momentum-hero-bg")
+                    .resizable()
+                    .scaledToFill()
+                    .blur(radius: isLocked ? BannerTreatment.lockedExtraBlurRadius : 0)
+                    .saturation(isLocked ? BannerTreatment.lockedSaturation : 1)
+            } else {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.98, green: 0.85, blue: 0.74),
+                        Color(red: 0.99, green: 0.91, blue: 0.83),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .trailing
+                )
+                .saturation(isLocked ? BannerTreatment.lockedSaturation : 1)
+            }
 
             if isLocked {
-                Color.white.opacity(0.32)
+                Color.white.opacity(BannerTreatment.lockedWhiteOverlayOpacity)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: DashboardLayout.cardCornerRadius, style: .continuous))

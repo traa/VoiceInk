@@ -700,6 +700,7 @@ struct DashboardContent: View {
                 )
             } ?? 0,
             bannerImage: art.image,
+            usesDefaultBanner: art.usesDefaultBanner,
             isCustomBanner: art.isCustomBanner,
             boardsTint: resolved.map { BannerTreatment.boardsTint(for: $0.book) } ?? ImageTint.clothPalette[0],
             bookChipImage: art.coverImage,
@@ -736,6 +737,7 @@ struct DashboardContent: View {
         var image: NSImage?
         var isCustomBanner = false
         var coverImage: NSImage?
+        var usesDefaultBanner = true
     }
 
     /// Disk-only lookups: the hero never waits on the network.
@@ -750,9 +752,12 @@ struct DashboardContent: View {
             coverCached: cover != nil
         )
         switch source.kind {
-        case .customBanner: return BannerArt(image: custom, isCustomBanner: true, coverImage: cover)
-        case .cover: return BannerArt(image: cover, isCustomBanner: false, coverImage: cover)
-        case .none: return BannerArt(coverImage: cover)
+        case .customBanner:
+            return BannerArt(image: custom, isCustomBanner: true, coverImage: cover, usesDefaultBanner: false)
+        case .cover:
+            return BannerArt(image: cover, isCustomBanner: false, coverImage: cover, usesDefaultBanner: false)
+        case .defaultBanner:
+            return BannerArt(coverImage: cover)
         }
     }
 

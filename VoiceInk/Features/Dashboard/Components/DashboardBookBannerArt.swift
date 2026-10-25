@@ -1,24 +1,27 @@
 import AppKit
 import SwiftUI
 
-/// Which image, if any, drives the hero's banner art (spec §8.6): custom banner, then cover, then none.
+/// Which image drives the hero's background (spec §8.6): custom banner, then cover (both drawn as
+/// right-hand art over the beige gradient), else the original full-card default banner bitmap.
 struct BookArtSource: Equatable {
     enum Kind: Equatable {
         case customBanner
         case cover
-        case none
+        /// No usable cover or custom banner: the original low-poly mountains bitmap (`momentum-hero-bg`).
+        case defaultBanner
     }
 
     let kind: Kind
 
-    static func resolve(book: DashboardBook, customBannerExists: Bool, coverCached: Bool) -> BookArtSource {
+    static func resolve(book: DashboardBook?, customBannerExists: Bool, coverCached: Bool) -> BookArtSource {
+        guard let book else { return BookArtSource(kind: .defaultBanner) }
         if book.customBannerFile != nil, customBannerExists {
             return BookArtSource(kind: .customBanner)
         }
         if book.coverID != nil, coverCached {
             return BookArtSource(kind: .cover)
         }
-        return BookArtSource(kind: .none)
+        return BookArtSource(kind: .defaultBanner)
     }
 }
 

@@ -16,7 +16,7 @@ We want the comparison to feel personal and tangible:
 2. Custom and built-in books appear in one list. Selecting a book drives the hero subtitle, the cover, and the open-book visual.
 3. Users can hide built-in books and delete custom books. Hidden or deleted books leave both the selection and the comparison.
 4. Users can optionally override a custom book's word count with an exact number. Built-in books are hide/show only (Author's call).
-5. The mountain art on the right of the hero is replaced by banner art derived from the selected book's cover (or the user's custom banner), with a natively drawn, static, realistic open book in front of it whose page stacks are proportional to progress, with the caption "~100 of 600 pages dictated".
+5. Books that have a cover or a custom banner get banner art derived from it on the right of the hero (replacing the mountain art for those books; books with neither keep the original mountain bitmap, §8.6), with a natively drawn, static, realistic open book in front of it whose page stacks are proportional to progress, with the caption "~100 of 600 pages dictated".
 6. Each book can have a custom banner image (pasted URL or uploaded file) that overrides the cover; it can be removed.
 7. Automatic selection keeps today's behaviour (largest book passed, generalised over the visible books).
 
@@ -129,7 +129,7 @@ They are hardcoded in `enum DashboardProgressBenchmark` (DashboardStatsModels.sw
 2. The user can **override** a **custom** book's word count with an exact number, editable per book. **Author's call:** built-in books cannot be overridden; they are only hidden/shown. This resolves the earlier wording "any book" in favour of custom-only.
 3. Custom books appear **in the same list** as built-ins. Selecting a book changes the banner cover/art and the word count used. "Finished" does not matter; the feature only compares dictated words to the book's words.
 4. Users can **hide built-in** books; custom books can be **deleted**. Hidden or deleted books are removed from selection and comparison.
-5. **Hero art.** The old mountain bitmap is replaced by two things:
+5. **Hero art.** For books with a cover or custom banner the old mountain bitmap is replaced by two things (books with neither keep the bitmap, §8.6):
    - **Banner art derived from the book's cover** (or the user's custom banner), full-bleed on the right ~55 % of the card, scaled to fill, softly faded into the beige gradient on its left edge, slightly desaturated and warmed so text stays legible; locked state treated as before (§8.6).
    - A **static, natively drawn open book** in front of it, with two spreads, a gutter shadow, page curvature and stacked page edges; left stack ∝ progress (clamped to 0…1), right stack = the remainder; caption "~100 of 600 pages dictated" under the book (the chosen mockup).
    - With no cover and no banner: the beige gradient and the open book with tinted boards.
@@ -359,13 +359,15 @@ For the resolved book `b` and dictated words `w`, let `progress = w / b.wordCoun
 
 ### 8.6 Hero layout and background
 
-Layers, back to front: (1) beige gradient, (2) book banner art on the right, (3) copy on the left and the open book on the right, (4) locked treatment.
+Layers, back to front: (1) background: the beige gradient **or**, for books without art, the original full-card bitmap; (2) book banner art on the right (cover/custom banner only), (3) copy on the left and the open book on the right, (4) locked treatment.
 
-1. **Beige gradient.** Remove `Image("momentum-hero-bg")` from `DashboardImpactBackground`. Replace it with a native `LinearGradient` from `Color(red: 0.98, green: 0.85, blue: 0.74)` (top-left) to `Color(red: 0.99, green: 0.91, blue: 0.83)` (right), sampled from the PNG's left side. Delete the `momentum-hero-bg.imageset` asset (clean cutover; it has no other references).
+**Ruling (round 2, reverses the earlier "delete the asset" decision):** a pure function `BookArtSource.resolve(book:customBannerExists:coverCached:)` returns `.customBanner`, `.cover` or `.defaultBanner`. `.defaultBanner` (every built-in without a custom banner, custom books with no cover/banner or whose cover is not cached yet, and the no-book state) draws the ORIGINAL `momentum-hero-bg` bitmap exactly as before the feature (full-card, `scaledToFill`; locked: `blur(2.5)`, `saturation(0.78)`, white 0.32). The imageset is therefore **kept** (restored from `71d59cd^`). `.cover`/`.customBanner` keep the native gradient plus faded art below.
+
+1. **Beige gradient (books with cover/custom banner).** `DashboardImpactBackground` draws a native `LinearGradient` from `Color(red: 0.98, green: 0.85, blue: 0.74)` (top-left) to `Color(red: 0.99, green: 0.91, blue: 0.83)` (right), sampled from the PNG's left side. For `.defaultBanner` it draws `Image("momentum-hero-bg")` instead (the asset is kept, see the ruling above).
 2. **Banner art (`DashboardBookBannerArt`).** The old mountain bitmap is replaced by art derived from the selected book. Source precedence:
    1. the custom banner (`customBannerFile`, §8.2);
    2. the Open Library cover, `-L` size (§8.3);
-   3. none: the layer is omitted, leaving the beige gradient with the tinted boards.
+   3. none (`.defaultBanner`): the art layer is omitted and the background is the original mountains bitmap, with the tinted boards on top.
 
    Treatment:
    - Frame: the right ~55 % of the card, full height, full-bleed to the card's top, right and bottom edges (the card already clips to `cardCornerRadius`). The image is `.scaledToFill()` and clipped. A portrait cover is therefore a landscape crop of its middle; that is expected.
@@ -377,8 +379,8 @@ Layers, back to front: (1) beige gradient, (2) book banner art on the right, (3)
    - **Ruling (Task 9): book scale.** The open book is drawn at 0.8 scale (192×112 pt, not ~240×118; the §8.7 coordinates are design units) so the book and the unsqueezed copy fit the real default card width of ~682 pt (window 950, sidebar 220, 24 pt padding per side). This overrides the earlier "do not shrink" note.
    - **Ruling (Task 9): hero button row.** The hero buttons (insights, review corrections, book chip) sit in a wrapping flow (`HeroButtonFlow`), not a single `HStack`. At the default width the book chip wraps onto a second line, so the card is taller than before.
 4. **Narrow widths (Ruling, Task 9):** below ~620 pt the banner art (cover or custom banner) **stays** and only the open book is dropped. A 0.5 beige wash is drawn over the art so the copy stays legible. This is owner-requested (the cover becomes the banner) and overrides the earlier "drops both" behaviour; copy is still never truncated in favour of the book.
-5. **Locked state:** the background stack (gradient plus art) gets the same `blur(2.5)`, `saturation(0.78)` and white 0.32 overlay the PNG gets today. When a banner art source exists the art is still drawn, with that treatment applied on top of its own blur logic (the 0.5 beige wash of the no-book layout also applies). **Author's call:** hide the open book and the book chip while locked; the locked prompt needs the space.
-6. **Fallback.** No cover and no custom banner (every built-in by default, custom books whose cover is missing or still loading, manually added books): beige gradient plus a soft `RadialGradient` highlight behind the book (white 0.45 → 0), and the open book with tinted boards.
+5. **Locked state:** the background stack (gradient plus art, or the default bitmap) gets the same `blur(2.5)`, `saturation(0.78)` and white 0.32 overlay the PNG gets today. When a banner art source exists the art is still drawn, with that treatment applied on top of its own blur logic (the 0.5 beige wash of the no-book layout also applies). **Author's call:** hide the open book and the book chip while locked; the locked prompt needs the space.
+6. **Fallback.** No cover and no custom banner (every built-in by default, custom books whose cover is missing or still loading, manually added books): the original mountains bitmap (§8.6 ruling) plus a soft `RadialGradient` highlight behind the book (white 0.45 → 0), and the open book with tinted boards.
 7. **Boards tint.** The hardcover boards under the page blocks use `coverTint` (§8.1): the average colour (`CIAreaAverage`) of the *active banner source* (custom banner if present, else cover), darkened ~20 % so the boards stay distinct from the art behind. It is computed once when that image is first stored or downloaded, persisted, and recomputed when the banner is set or removed. Without a `coverTint`, use a deterministic colour from a hash of `id` over a curated palette of 8 cloth colours (oxblood, navy, forest, ochre, …).
 
 ### 8.7 Open-book rendering (static `Canvas`)
@@ -450,8 +452,8 @@ Dark mode: the hero is an intentionally light card (fixed colours in `DashboardM
 |---|---|
 | `VoiceInk/Features/Dashboard/State/DashboardStatsModels.swift` | `DashboardProgressBenchmark`: replace private `Milestone` and the lists with `builtInBooks: [DashboardBook]` (stable IDs). Make `equivalence` take the resolved book and `allowsRepeats`; add `.none`. Add the pure `resolveBook(words:visible:selectedID:)` implementing the generalised current behaviour (§8.4). |
 | `VoiceInk/Features/Dashboard/Views/DashboardContent.swift` | Inject `DashboardBookStore`; `@AppStorage` for selection and hidden IDs; feed the resolved book, progress and banner/cover images into `heroSection`; update `formattedProgressBenchmarkText` (estimate variant, `.none`); present the Add Book sheet and Manage Books `.sidePanel`. |
-| `VoiceInk/Features/Dashboard/Components/DashboardHeroCard.swift` | New inputs (`book: DashboardBook?`, `progress`, `bannerImage: NSImage?`, `bannerIsCustom`, menu callbacks); `HStack` layout with `DashboardOpenBookView` and a wrapping `HeroButtonFlow` button row; book chip/menu; `DashboardImpactBackground` swaps the bitmap for the beige gradient plus the new `DashboardBookBannerArt` layer (§8.6). |
-| `VoiceInk/Assets.xcassets/momentum-hero-bg.imageset/` | Delete. |
+| `VoiceInk/Features/Dashboard/Components/DashboardHeroCard.swift` | New inputs (`book: DashboardBook?`, `progress`, `bannerImage: NSImage?`, `bannerIsCustom`, menu callbacks); `HStack` layout with `DashboardOpenBookView` and a wrapping `HeroButtonFlow` button row; book chip/menu; `DashboardImpactBackground` keeps the bitmap for books without art and uses the beige gradient plus the new `DashboardBookBannerArt` layer for books with a cover/custom banner (§8.6). |
+| `VoiceInk/Assets.xcassets/momentum-hero-bg.imageset/` | Keep (default banner for books without art; round-2 ruling reverses the earlier deletion). |
 | `VoiceInk/Localizable.xcstrings` | New strings (estimate subtitle, caption variants, sheet/panel copy, banner copy and import errors, disclosure, bookmark accessibility), with de/fr/zh-Hans. |
 | `README.md` | Recommended (owner signed off the privacy trade-off): add a short note under "Privacy First" that transcription stays fully offline and that dashboard book search and banner-by-URL are opt-in online lookups made only when the user uses them. |
 
