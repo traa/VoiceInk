@@ -25,6 +25,49 @@ struct BookArtSource: Equatable {
     }
 }
 
+/// How a piece of art is composed into the hero's art region (spec §8.6).
+/// Landscape art (true banners, the mountains bitmap) fills the region. Portrait or squarish art, i.e. almost
+/// every real book cover, would be cropped to a thin blurred band that way, so it is drawn sharp, aspect-fit
+/// in front of a blurred, darkened copy of itself.
+enum ArtLayout: Equatable {
+    case fullBleed
+    case coverOnBackdrop
+
+    /// Width / height below this is "not landscape".
+    static let landscapeThreshold: CGFloat = 1.15
+
+    static func resolve(imagePixelSize size: CGSize) -> ArtLayout {
+        guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { return .fullBleed }
+        return size.width / size.height < landscapeThreshold ? .coverOnBackdrop : .fullBleed
+    }
+
+    /// Frame of the sharp cover inside an art region of `container` size: as tall as the region minus `inset`
+    /// above and below (aspect-fit), centred in the area between `leadingInset` (the fade zone) and
+    /// `container.width - trailingReserve`, and at least `inset` away from both sides of that area.
+    static func coverFrame(
+        container: CGSize, imageAspect: CGFloat, inset: CGFloat, leadingInset: CGFloat, trailingReserve: CGFloat
+    ) -> CGRect {
+        let width = container.width.isFinite ? max(container.width, 0) : 0
+        let height = container.height.isFinite ? max(container.height, 0) : 0
+        let aspect = imageAspect.isFinite && imageAspect > 0 ? imageAspect : 2.0 / 3.0
+        let areaMinX = min(max(leadingInset, 0), width)
+        let areaMaxX = max(areaMinX, width - max(trailingReserve, 0))
+        let maxWidth = max(areaMaxX - areaMinX - 2 * inset, 0)
+        var coverHeight = max(height - 2 * inset, 0)
+        var coverWidth = coverHeight * aspect
+        if coverWidth > maxWidth {
+            coverWidth = maxWidth
+            coverHeight = coverWidth / aspect
+        }
+        return CGRect(
+            x: (areaMinX + areaMaxX - coverWidth) / 2,
+            y: (height - coverHeight) / 2,
+            width: coverWidth,
+            height: coverHeight
+        )
+    }
+}
+
 enum BannerTreatment {
     /// Open Library covers (`-L`, ~500 px) are always blurred when stretched into the banner.
     static let coverBlurRadius: CGFloat = 10
@@ -53,6 +96,13 @@ enum BannerTreatment {
     static let mutedDarkening: Double = 0.15
     static let cellCornerRadius: CGFloat = 2
     static let cellHairlineOpacity: Double = 0.15
+    /// Portrait covers (spec §8.6): blurred backdrop (moderate, so colours still read), darkening, and the
+    /// sharp cover's inset, trailing reserve (room for the caption pill) and corner radius.
+    static let backdropBlurRadius: CGFloat = 14
+    static let backdropDarkening: Double = 0.18
+    static let coverInset: CGFloat = 12
+    static let coverTrailingReserve: CGFloat = 140
+    static let coverCornerRadius: CGFloat = 3
 
     /// The original low-poly mountains bitmap, used as the art of books without cover or custom banner.
     static var defaultBannerImage: NSImage? { NSImage(named: "momentum-hero-bg") }
@@ -78,9 +128,16 @@ enum BannerTreatment {
     }
 
     static func pixelWidth(of image: NSImage) -> Int {
+        Int(pixelSize(of: image).width)
+    }
+
+    /// Largest bitmap representation's pixel size, falling back to the point size.
+    static func pixelSize(of image: NSImage) -> CGSize {
         let rep = image.representations.max { $0.pixelsWide < $1.pixelsWide }
-        if let rep, rep.pixelsWide > 0 { return rep.pixelsWide }
-        return Int(image.size.width)
+        if let rep, rep.pixelsWide > 0, rep.pixelsHigh > 0 {
+            return CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
+        }
+        return image.size
     }
 }
 
@@ -115,7 +172,7 @@ struct DashboardBookBannerArt: View {
                 if let reveal, showsGrid {
                     revealLayers(reveal: reveal, size: size, blur: blur)
                 } else {
-                    artImage(blur: blur + (isLocked ? BannerTreatment.lockedExtraBlurRadius : 0))
+                    artImage(size: size, blur: blur + (isLocked ? BannerTreatment.lockedExtraBlurRadius : 0))
                         .saturation(isLocked ? BannerTreatment.lockedSaturation : 1)
                         .overlay(Color.white.opacity(isLocked ? BannerTreatment.lockedWhiteOverlayOpacity : 0))
                         .overlay(Color(red: 0.98, green: 0.88, blue: 0.78).opacity(isLocked ? BannerTreatment.lockedWashOpacity : 0))
@@ -138,8 +195,9 @@ struct DashboardBookBannerArt: View {
 
     // MARK: - Layers
 
+    /// Blur of the sharp/full-bleed art itself. Portrait covers stay sharp (their backdrop has its own blur).
     private func blurRadius(artWidth: CGFloat) -> CGFloat {
-        if isDefaultBanner { return 0 }
+        if isDefaultBanner || layout == .coverOnBackdrop { return 0 }
         return BannerTreatment.blurRadius(
             isCustomBanner: isCustomBanner,
             imagePixelWidth: BannerTreatment.pixelWidth(of: image),
@@ -148,18 +206,56 @@ struct DashboardBookBannerArt: View {
         )
     }
 
+    private var layout: ArtLayout {
+        isDefaultBanner ? .fullBleed : ArtLayout.resolve(imagePixelSize: BannerTreatment.pixelSize(of: image))
+    }
+
+    /// The composed art for one layer (muted, full colour or locked), always exactly `size`: either the image
+    /// filling the region, or (portrait covers) a sharp cover standing on a blurred, darkened backdrop.
     /// `Color.clear` carries the layout size so the image's intrinsic size can never leak into it.
-    private func artImage(blur: CGFloat) -> some View {
-        Color.clear
-            .overlay(alignment: isDefaultBanner ? .trailing : .center) {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .scaleEffect(blur > 0 ? BannerTreatment.blurredOverscale : 1)
-                    .scaleEffect(isDefaultBanner ? BannerTreatment.defaultBannerZoom : 1, anchor: .topTrailing)
-                    .blur(radius: blur)
-            }
-            .clipped()
+    @ViewBuilder
+    private func artImage(size: CGSize, blur: CGFloat) -> some View {
+        switch layout {
+        case .fullBleed:
+            Color.clear
+                .overlay(alignment: isDefaultBanner ? .trailing : .center) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .scaleEffect(blur > 0 ? BannerTreatment.blurredOverscale : 1)
+                        .scaleEffect(isDefaultBanner ? BannerTreatment.defaultBannerZoom : 1, anchor: .topTrailing)
+                        .blur(radius: blur)
+                }
+                .clipped()
+        case .coverOnBackdrop:
+            let pixels = BannerTreatment.pixelSize(of: image)
+            let frame = ArtLayout.coverFrame(
+                container: size,
+                imageAspect: pixels.height > 0 ? pixels.width / pixels.height : 2.0 / 3.0,
+                inset: BannerTreatment.coverInset,
+                leadingInset: BannerTreatment.gridFadeWidth,
+                trailingReserve: BannerTreatment.coverTrailingReserve
+            )
+            Color.clear
+                .overlay {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .scaleEffect(BannerTreatment.blurredOverscale)
+                        .blur(radius: BannerTreatment.backdropBlurRadius + blur)
+                        .overlay(Color.black.opacity(BannerTreatment.backdropDarkening))
+                }
+                .overlay(alignment: .topLeading) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .frame(width: frame.width, height: frame.height)
+                        .clipShape(RoundedRectangle(cornerRadius: BannerTreatment.coverCornerRadius, style: .continuous))
+                        .shadow(color: .black.opacity(0.45), radius: 6, x: 0, y: 3)
+                        .blur(radius: blur)
+                        .offset(x: frame.minX, y: frame.minY)
+                }
+                .clipped()
+        }
     }
 
     @ViewBuilder
@@ -169,12 +265,12 @@ struct DashboardBookBannerArt: View {
         let radius = min(BannerTreatment.cellCornerRadius, min(grid.cellWidth, grid.cellHeight) / 4)
         ZStack {
             // Muted base over the whole art: it also fills the 1 pt gaps, so the art stays one picture.
-            artImage(blur: blur)
+            artImage(size: size, blur: blur)
                 .saturation(BannerTreatment.mutedSaturation)
                 .overlay(Color.black.opacity(BannerTreatment.mutedDarkening))
 
             // Full colour through the filled cells (the next one partially).
-            artImage(blur: blur)
+            artImage(size: size, blur: blur)
                 .mask(cellMask(grid: grid, radius: radius) { state.opacity(ofCell: $0) })
 
             Canvas { context, _ in
