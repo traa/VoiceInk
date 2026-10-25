@@ -29,9 +29,11 @@ private struct StubSearch: BookSearching {
 private struct StubPageCounts: PageCountProviding {
     let log: CallLog
     var result: Int?
+    var gate: Gate?
 
     func pageCount(title: String, author: String?) async -> Int? {
         log.recordPageCount(title: title, author: author)
+        await gate?.wait()
         return result
     }
 }
@@ -92,13 +94,14 @@ private struct Env {
 
     func makeViewModel(
         pageCount: Int? = nil,
+        pageCountGate: Gate? = nil,
         debounce: Duration = .milliseconds(1),
         search: @escaping @Sendable (String) async throws -> [BookSearchResult] = { _ in [] }
     ) -> AddBookViewModel {
         AddBookViewModel(
             store: store,
             search: StubSearch(log: log, handler: search),
-            pageCounts: StubPageCounts(log: log, result: pageCount),
+            pageCounts: StubPageCounts(log: log, result: pageCount, gate: pageCountGate),
             covers: covers,
             bannerEditor: bannerEditor,
             debounce: debounce
@@ -499,5 +502,39 @@ struct AddBookViewModelTests {
         let banners = env.root.appendingPathComponent("BookBanners")
         #expect(!FileManager.default.fileExists(atPath: banners.path))
         #expect(!FileManager.default.fileExists(atPath: env.root.appendingPathComponent("dashboard-books.json").path))
+    }
+
+    @Test func cancelDuringGoogleFallbackWritesNothing() async throws {
+        let env = try Env()
+        defer { env.cleanUp() }
+        let gate = Gate()
+        let viewModel = env.makeViewModel(pageCount: 400, pageCountGate: gate)
+        viewModel.selected = result(pages: nil)
+        viewModel.preparedBannerData = try jpegData()
+
+        var onAddedCalls = 0
+        let addTask = Task { @MainActor in
+            let book = await viewModel.add()
+            if book != nil { onAddedCalls += 1 }
+            return book
+        }
+
+        // Bounded wait for add() to reach the suspended Google lookup.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while env.log.pageCounts.isEmpty, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(env.log.pageCounts.count == 1)
+
+        viewModel.cancel()
+        await gate.open()
+        let book = await addTask.value
+        env.store.waitForPendingWrites()
+
+        #expect(book == nil)
+        #expect(onAddedCalls == 0)
+        #expect(env.store.customBooks.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: env.root.appendingPathComponent("BookBanners").path))
+        #expect(!viewModel.isAdding)
     }
 }

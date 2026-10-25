@@ -41,6 +41,8 @@ final class AddBookViewModel: ObservableObject {
 
     private var searchTask: Task<Void, Never>?
     private var generation = 0
+    /// Bumped by `cancel()`; an `add()` that started before it must not write or report success.
+    private var addEpoch = 0
 
     init(
         store: DashboardBookStore,
@@ -106,6 +108,7 @@ final class AddBookViewModel: ObservableObject {
         searchTask?.cancel()
         searchTask = nil
         generation += 1
+        addEpoch += 1
         bannerEditor.cancel()
         preparedBannerData = nil
         selected = nil
@@ -150,6 +153,7 @@ final class AddBookViewModel: ObservableObject {
         guard !isAdding, let result = selected, !isAlreadyAdded(result) else { return nil }
         isAdding = true
         defer { isAdding = false }
+        let epoch = addEpoch
 
         var pages = Self.plausible(result.pagesMedian)
         var provider = DashboardBook.PageCountProvider.openLibrary
@@ -160,6 +164,7 @@ final class AddBookViewModel: ObservableObject {
                 provider = .googleBooks
             }
         }
+        guard epoch == addEpoch, !Task.isCancelled else { return nil }
         guard !isAlreadyAdded(result) else { return nil }
         guard let pages else {
             state = .needsWordCount(result)
@@ -305,6 +310,7 @@ struct AddBookSheet: View {
     @State private var manualTitle = ""
     @State private var manualCount = ""
     @State private var showsBannerEditor = false
+    @State private var addTask: Task<Void, Never>?
 
     init(onAdded: @escaping (DashboardBook) -> Void) {
         self.onAdded = onAdded
@@ -336,7 +342,10 @@ struct AddBookSheet: View {
             }
         }
         .frame(width: 460, height: 520)
-        .onDisappear { viewModel.cancel() }
+        .onDisappear {
+            addTask?.cancel()
+            viewModel.cancel()
+        }
     }
 
     // MARK: Header
@@ -610,7 +619,8 @@ struct AddBookSheet: View {
     // MARK: Actions
 
     private func addSelected() {
-        Task {
+        addTask?.cancel()
+        addTask = Task {
             if let book = await viewModel.add() {
                 onAdded(book)
                 dismiss()
