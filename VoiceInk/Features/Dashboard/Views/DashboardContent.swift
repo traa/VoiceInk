@@ -56,7 +56,7 @@ struct DashboardContent: View {
     /// Bumped when a background cover fetch lands so the hero re-reads the (disk-only) cover cache.
     @State private var coverRevision = 0
     /// Books whose cover fetch was already attempted this app session (no retry after failure).
-    private static var coverFetchAttempts = Set<String>()
+    @MainActor private static var coverFetchAttempts = Set<String>()
     @FocusState private var isNameFieldFocused: Bool
     @Query(Self.recentTranscriptionsDescriptor()) private var recentTranscriptionCandidates: [Transcription]
 
@@ -703,6 +703,9 @@ struct DashboardContent: View {
             isCustomBanner: art.isCustomBanner,
             boardsTint: resolved.map { BannerTreatment.boardsTint(for: $0.book) } ?? ImageTint.clothPalette[0],
             bookChipImage: art.coverImage,
+            menuThumbnailSource: { book in
+                book.coverID.flatMap { BookCoverCache.shared.cachedImage(for: $0) } ?? bookStore.bannerImage(for: book)
+            },
             menuBooks: visibleBooks.sorted { ($0.wordCount, $0.id) < ($1.wordCount, $1.id) },
             isAutomaticSelected: selectedBookID.isEmpty,
             selectedBookID: selectedBookID.isEmpty ? nil : selectedBookID,

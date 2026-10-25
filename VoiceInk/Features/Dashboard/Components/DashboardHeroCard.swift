@@ -30,6 +30,8 @@ struct DashboardHeroCard: View {
     let isCustomBanner: Bool
     let boardsTint: RGB
     let bookChipImage: NSImage?
+    /// Cached cover (or banner) for a menu row; disk/memory only, never fetched. Nil draws the tinted placeholder.
+    let menuThumbnailSource: (DashboardBook) -> NSImage?
     let menuBooks: [DashboardBook]
     let isAutomaticSelected: Bool
     let selectedBookID: String?
@@ -42,16 +44,12 @@ struct DashboardHeroCard: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            // Wide: banner art on the right with the open book in front. The explicit ideal width makes
-            // this variant drop out below `minimumCardWidth`, leaving the copy-only layout.
+            // Wide: banner art on the right with the open book in front. No ideal-width override: the
+            // copy column's ideal width is the button row (text frames below have a small ideal width),
+            // so this variant is only chosen when the buttons and book fit unsqueezed.
             cardContent(showsBook: showsBookArt)
                 .background(alignment: .trailing) { artLayer }
-                .frame(
-                    minWidth: BannerTreatment.minimumCardWidth,
-                    idealWidth: BannerTreatment.minimumCardWidth,
-                    maxWidth: .infinity,
-                    alignment: .leading
-                )
+                .frame(minWidth: BannerTreatment.minimumCardWidth, maxWidth: .infinity, alignment: .leading)
 
             cardContent(showsBook: false)
         }
@@ -183,10 +181,19 @@ struct DashboardHeroCard: View {
             if !menuBooks.isEmpty {
                 Divider()
                 ForEach(menuBooks) { menuBook in
-                    Button {
-                        onSelectBook(menuBook)
-                    } label: {
-                        menuLabel(menuTitle(for: menuBook), isSelected: menuBook.id == selectedBookID)
+                    Toggle(
+                        isOn: Binding(
+                            get: { menuBook.id == selectedBookID },
+                            set: { _ in onSelectBook(menuBook) }
+                        )
+                    ) {
+                        Label {
+                            Text(menuTitle(for: menuBook))
+                        } icon: {
+                            Image(nsImage: BookMenuThumbnail.make(
+                                from: menuThumbnailSource(menuBook),
+                                tint: BannerTreatment.boardsTint(for: menuBook)))
+                        }
                     }
                 }
             }
@@ -237,12 +244,12 @@ struct DashboardHeroCard: View {
     private var heroCopy: some View {
         VStack(alignment: .leading, spacing: 10) {
             headlineText
-                .frame(maxWidth: 720, alignment: .leading)
+                .frame(idealWidth: 200, maxWidth: 720, alignment: .leading)
 
             Text(subtext)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(DashboardMomentumBackground.subtext)
-                .frame(maxWidth: 620, alignment: .leading)
+                .frame(idealWidth: 200, maxWidth: 620, alignment: .leading)
         }
     }
 
@@ -295,6 +302,35 @@ struct DashboardHeroCard: View {
                 .frame(maxWidth: 540, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 16×22 pt menu-row thumbnail: aspect-filled cover/banner, or the tinted placeholder.
+enum BookMenuThumbnail {
+    static let size = NSSize(width: 16, height: 22)
+
+    static func make(from source: NSImage?, tint: RGB) -> NSImage {
+        let image = NSImage(size: size, flipped: false) { rect in
+            let clip = NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2)
+            clip.addClip()
+            if let source, source.size.width > 0, source.size.height > 0 {
+                let scale = max(rect.width / source.size.width, rect.height / source.size.height)
+                let drawSize = NSSize(width: source.size.width * scale, height: source.size.height * scale)
+                let drawRect = NSRect(
+                    x: rect.midX - drawSize.width / 2, y: rect.midY - drawSize.height / 2,
+                    width: drawSize.width, height: drawSize.height)
+                source.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1)
+            } else {
+                NSColor(srgbRed: tint.red, green: tint.green, blue: tint.blue, alpha: 1).setFill()
+                rect.fill()
+            }
+            NSColor.black.withAlphaComponent(0.2).setStroke()
+            clip.lineWidth = 0.5
+            clip.stroke()
+            return true
+        }
+        image.isTemplate = false
+        return image
     }
 }
 
