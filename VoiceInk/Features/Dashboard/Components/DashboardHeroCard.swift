@@ -46,22 +46,27 @@ struct DashboardHeroCard: View {
         ViewThatFits(in: .horizontal) {
             // Tier 1 (wide): banner art + open book. No ideal-width override: the wide variant's ideal
             // width is copy (wraps freely) + book, so it is only chosen when the book fits unsqueezed.
-            cardContent(showsBook: showsBookArt)
-                .background(alignment: .trailing) { artLayer(showsBook: showsBookArt) }
+            cardContent(showsBook: artPlan(tierShowsBook: true).drawsBook)
+                .background(alignment: .trailing) { artLayer(plan: artPlan(tierShowsBook: true)) }
                 .frame(minWidth: BannerTreatment.minimumCardWidth, maxWidth: .infinity, alignment: .leading)
 
             // Tier 2 (narrower): the book is dropped, the banner art stays (when there is one).
             // Tier 3 (no art source): plain gradient, drawn by `DashboardImpactBackground`.
             cardContent(showsBook: false)
-                .background(alignment: .trailing) { artLayer(showsBook: false) }
+                .background(alignment: .trailing) { artLayer(plan: artPlan(tierShowsBook: false)) }
         }
         .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
         .background(DashboardImpactBackground(isLocked: isLocked))
         .clipShape(RoundedRectangle(cornerRadius: DashboardLayout.cardCornerRadius, style: .continuous))
     }
 
-    private var showsBookArt: Bool {
-        !isLocked && book != nil
+    private func artPlan(tierShowsBook: Bool) -> BannerTreatment.ArtPlan {
+        BannerTreatment.artPlan(
+            isLocked: isLocked,
+            hasBook: book != nil,
+            hasArtImage: bannerImage != nil,
+            tierShowsBook: tierShowsBook
+        )
     }
 
     /// The open book is drawn at 80 % so copy + book fit the app's fixed 950 pt window (hero ≈ 682 pt).
@@ -71,24 +76,25 @@ struct DashboardHeroCard: View {
     private static let bookCenterInset: CGFloat = 28 + 240 * bookScale / 2
 
     @ViewBuilder
-    private func artLayer(showsBook: Bool) -> some View {
-        if showsBookArt, showsBook || bannerImage != nil {
+    private func artLayer(plan: BannerTreatment.ArtPlan) -> some View {
+        if plan.drawsBook || plan.drawsArt {
             GeometryReader { proxy in
                 let width = proxy.size.width
                 let height = proxy.size.height
                 ZStack(alignment: .topLeading) {
-                    if let bannerImage {
+                    if plan.drawsArt, let bannerImage {
                         let artWidth = width * BannerTreatment.artWidthFraction
                         DashboardBookBannerArt(
                             image: bannerImage,
                             isCustomBanner: isCustomBanner,
-                            washOpacity: showsBook ? 0 : 0.5
+                            washOpacity: plan.washOpacity,
+                            isLocked: plan.artIsLocked
                         )
                             .frame(width: artWidth, height: height)
                             .offset(x: width - artWidth)
                     }
 
-                    if showsBook {
+                    if plan.drawsBook {
                         // Soft light pool behind the book and its caption: separates the cream pages from the
                         // gradient (no art) and keeps the caption legible over any art.
                         RadialGradient(

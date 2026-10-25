@@ -47,11 +47,16 @@ struct DashboardOpenBookView: View {
             .accessibilityHidden(true)
 
             if showsCaption {
+                // Fixed colours: the hero is an intentionally light card (spec §8.7 "Dark mode"), so a semantic
+                // colour would turn white in dark mode. The light pill keeps it legible over any banner art.
                 Text(caption)
                     .font(.system(size: 12))
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DashboardMomentumBackground.subtext)
                     .multilineTextAlignment(.center)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.7)))
             }
         }
         .animation(nil, value: progress)

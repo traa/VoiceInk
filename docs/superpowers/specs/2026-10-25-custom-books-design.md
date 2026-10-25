@@ -377,7 +377,7 @@ Layers, back to front: (1) beige gradient, (2) book banner art on the right, (3)
    - **Ruling (Task 9): book scale.** The open book is drawn at 0.8 scale (192×112 pt, not ~240×118; the §8.7 coordinates are design units) so the book and the unsqueezed copy fit the real default card width of ~682 pt (window 950, sidebar 220, 24 pt padding per side). This overrides the earlier "do not shrink" note.
    - **Ruling (Task 9): hero button row.** The hero buttons (insights, review corrections, book chip) sit in a wrapping flow (`HeroButtonFlow`), not a single `HStack`. At the default width the book chip wraps onto a second line, so the card is taller than before.
 4. **Narrow widths (Ruling, Task 9):** below ~620 pt the banner art (cover or custom banner) **stays** and only the open book is dropped. A 0.5 beige wash is drawn over the art so the copy stays legible. This is owner-requested (the cover becomes the banner) and overrides the earlier "drops both" behaviour; copy is still never truncated in favour of the book.
-5. **Locked state:** the background stack (gradient plus art) gets the same `blur(2.5)`, `saturation(0.78)` and white 0.32 overlay the PNG gets today. **Author's call:** hide the open book while locked; the locked prompt needs the space.
+5. **Locked state:** the background stack (gradient plus art) gets the same `blur(2.5)`, `saturation(0.78)` and white 0.32 overlay the PNG gets today. When a banner art source exists the art is still drawn, with that treatment applied on top of its own blur logic (the 0.5 beige wash of the no-book layout also applies). **Author's call:** hide the open book and the book chip while locked; the locked prompt needs the space.
 6. **Fallback.** No cover and no custom banner (every built-in by default, custom books whose cover is missing or still loading, manually added books): beige gradient plus a soft `RadialGradient` highlight behind the book (white 0.45 → 0), and the open book with tinted boards.
 7. **Boards tint.** The hardcover boards under the page blocks use `coverTint` (§8.1): the average colour (`CIAreaAverage`) of the *active banner source* (custom banner if present, else cover), darkened ~20 % so the boards stay distinct from the art behind. It is computed once when that image is first stored or downloaded, persisted, and recomputed when the banner is set or removed. Without a `coverTint`, use a deterministic colour from a hash of `id` over a curated palette of 8 cloth colours (oxblood, navy, forest, ochre, …).
 
@@ -393,7 +393,7 @@ T   = book.pagesEquivalent                       (≥ 2)
 L   = Int((P * Double(T)).rounded())             pages dictated (caption)
 ```
 
-Caption: "~\(L) of \(T) pages dictated", using a new key "~%@ of %@ pages dictated" with locale-formatted numbers. When P = 1: "All \(T) pages dictated", or "All \(T) pages · %@×" when progress ≥ 2. Use `.monospacedDigit()`, secondary colour, centred under the book.
+Caption: "~\(L) of \(T) pages dictated", using a new key "~%@ of %@ pages dictated" with locale-formatted numbers. When P = 1: "All \(T) pages dictated", or "All \(T) pages · %@×" when progress ≥ 2. Use `.monospacedDigit()`, centred under the book, in the fixed `DashboardMomentumBackground.subtext` colour on a white 0.7 capsule (never a semantic colour: the card is light in dark mode too, and the capsule keeps it legible over any banner art).
 
 Coordinate frame (W×H = 240×118, origin top-left):
 - Gutter x = W/2.

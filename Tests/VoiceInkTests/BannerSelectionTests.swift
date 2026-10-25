@@ -139,6 +139,43 @@ struct BannerSelectionTests {
         #expect(BannerTreatment.minimumCardWidth == 620)
     }
 
+    // MARK: - Art plan (locked state, spec §8.6 item 5)
+
+    @Test func unlockedWideTierDrawsArtAndBookWithoutWash() {
+        let plan = BannerTreatment.artPlan(isLocked: false, hasBook: true, hasArtImage: true, tierShowsBook: true)
+        #expect(plan == .init(drawsArt: true, drawsBook: true, artIsLocked: false, washOpacity: 0))
+    }
+
+    @Test func lockedKeepsArtButHidesBook() {
+        let plan = BannerTreatment.artPlan(isLocked: true, hasBook: true, hasArtImage: true, tierShowsBook: true)
+        #expect(plan.drawsArt)
+        #expect(!plan.drawsBook)
+        #expect(plan.artIsLocked)
+        #expect(plan.washOpacity == BannerTreatment.overlapWashOpacity)
+    }
+
+    @Test func lockedWithoutArtDrawsNothing() {
+        let plan = BannerTreatment.artPlan(isLocked: true, hasBook: true, hasArtImage: false, tierShowsBook: true)
+        #expect(!plan.drawsArt && !plan.drawsBook)
+    }
+
+    @Test func narrowTierKeepsArtDropsBook() {
+        let plan = BannerTreatment.artPlan(isLocked: false, hasBook: true, hasArtImage: true, tierShowsBook: false)
+        #expect(plan.drawsArt && !plan.drawsBook && !plan.artIsLocked)
+        #expect(plan.washOpacity == BannerTreatment.overlapWashOpacity)
+    }
+
+    @Test func noBookNeverDrawsBook() {
+        let plan = BannerTreatment.artPlan(isLocked: false, hasBook: false, hasArtImage: false, tierShowsBook: true)
+        #expect(!plan.drawsBook && !plan.drawsArt)
+    }
+
+    @Test func lockedTreatmentConstantsMatchSpec() {
+        #expect(BannerTreatment.lockedExtraBlurRadius == 2.5)
+        #expect(BannerTreatment.lockedSaturation == 0.78)
+        #expect(BannerTreatment.lockedWhiteOverlayOpacity == 0.32)
+    }
+
     // MARK: - Boards tint
 
     @Test func boardsTintFollowsActiveSource() {
