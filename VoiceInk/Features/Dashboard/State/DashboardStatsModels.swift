@@ -491,6 +491,21 @@ enum DashboardProgressBenchmark {
         return min(1, max(0, Double(words) / Double(book.wordCount)))
     }
 
+    /// Ratio drawn by the open book's "N×" caption. Clamped to 1 unless the subtitle may report
+    /// repeats, so the caption never shows a multiple the subtitle does not.
+    static func openBookRatio(words: Int, book: DashboardBook, allowsRepeats: Bool) -> Double {
+        guard book.wordCount > 0 else { return 0 }
+        let ratio = max(0, Double(words) / Double(book.wordCount))
+        return allowsRepeats ? ratio : min(1, ratio)
+    }
+
+    static func multipleText(_ count: Int) -> String {
+        if count == 2 {
+            return String(localized: "twice")
+        }
+        return String(localized: "\(Formatters.formattedNumber(count)) times")
+    }
+
     static func equivalence(for words: Int, book: DashboardBook?, allowsRepeats: Bool) -> Equivalence {
         guard let book, book.wordCount > 0 else { return .none }
 

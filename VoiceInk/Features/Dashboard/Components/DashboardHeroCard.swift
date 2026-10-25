@@ -20,10 +20,108 @@ struct DashboardHeroCard: View {
     let actionHelp: String
     let actionAccessibilityLabel: String
     let reviewCorrectionCount: Int?
+    let hasLoadedStats: Bool
+    let book: DashboardBook?
+    /// Clamped progress `P` (0...1) of the resolved book.
+    let progress: Double
+    /// Unclamped for repeats-allowed books, clamped otherwise (see `DashboardProgressBenchmark.openBookRatio`).
+    let progressRatio: Double
+    let bannerImage: NSImage?
+    let isCustomBanner: Bool
+    let boardsTint: RGB
+    let bookChipImage: NSImage?
+    let menuBooks: [DashboardBook]
+    let isAutomaticSelected: Bool
+    let selectedBookID: String?
+    let onSelectAutomatic: () -> Void
+    let onSelectBook: (DashboardBook) -> Void
+    let onAddBook: () -> Void
+    let onManageBooks: () -> Void
     let onViewInsights: () -> Void
     let onReviewCorrections: () -> Void
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            // Wide: banner art on the right with the open book in front. The explicit ideal width makes
+            // this variant drop out below `minimumCardWidth`, leaving the copy-only layout.
+            cardContent(showsBook: showsBookArt)
+                .background(alignment: .trailing) { artLayer }
+                .frame(
+                    minWidth: BannerTreatment.minimumCardWidth,
+                    idealWidth: BannerTreatment.minimumCardWidth,
+                    maxWidth: .infinity,
+                    alignment: .leading
+                )
+
+            cardContent(showsBook: false)
+        }
+        .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
+        .background(DashboardImpactBackground(isLocked: isLocked))
+        .clipShape(RoundedRectangle(cornerRadius: DashboardLayout.cardCornerRadius, style: .continuous))
+    }
+
+    private var showsBookArt: Bool {
+        !isLocked && book != nil
+    }
+
+    /// Centre of the open book from the card's trailing edge: card padding (28) + half the book (120).
+    private static let bookCenterInset: CGFloat = 148
+
+    @ViewBuilder
+    private var artLayer: some View {
+        if showsBookArt {
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let height = proxy.size.height
+                ZStack(alignment: .topLeading) {
+                    if let bannerImage {
+                        let artWidth = width * BannerTreatment.artWidthFraction
+                        DashboardBookBannerArt(image: bannerImage, isCustomBanner: isCustomBanner)
+                            .frame(width: artWidth, height: height)
+                            .offset(x: width - artWidth)
+                    }
+
+                    // Soft light pool behind the book and its caption: separates the cream pages from the
+                    // gradient (no art) and keeps the caption legible over any art.
+                    RadialGradient(
+                        colors: [Color.white.opacity(bannerImage == nil ? 0.45 : 0.62), Color.white.opacity(0)],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 190
+                    )
+                    .frame(width: 380, height: 380)
+                    .position(x: width - Self.bookCenterInset, y: height / 2)
+                }
+                .frame(width: width, height: height)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private func cardContent(showsBook: Bool) -> some View {
+        HStack(alignment: .center, spacing: 20) {
+            copyColumn
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if showsBook, let book {
+                DashboardOpenBookView(
+                    progress: hasLoadedStats ? progress : 0,
+                    ratio: hasLoadedStats ? progressRatio : 0,
+                    totalPages: book.pagesEquivalent,
+                    title: book.displayTitle,
+                    boardsTint: boardsTint,
+                    showsCaption: hasLoadedStats
+                )
+                .fixedSize()
+            }
+        }
+        .padding(.horizontal, 28)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
+    }
+
+    private var copyColumn: some View {
         VStack(alignment: .leading, spacing: 10) {
             if isLocked {
                 lockedInsightsPrompt
@@ -65,14 +163,68 @@ struct DashboardHeroCard: View {
                         )
                     )
                 }
+
+                if !isLocked {
+                    bookChip
+                }
             }
             .padding(.top, 8)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
-        .background(DashboardImpactBackground(isLocked: isLocked))
-        .clipShape(RoundedRectangle(cornerRadius: DashboardLayout.cardCornerRadius, style: .continuous))
+    }
+
+    // MARK: - Book chip
+
+    private var bookChip: some View {
+        Menu {
+            Button(action: onSelectAutomatic) {
+                menuLabel(String(localized: "Automatic"), isSelected: isAutomaticSelected)
+            }
+
+            if !menuBooks.isEmpty {
+                Divider()
+                ForEach(menuBooks) { menuBook in
+                    Button {
+                        onSelectBook(menuBook)
+                    } label: {
+                        menuLabel(menuTitle(for: menuBook), isSelected: menuBook.id == selectedBookID)
+                    }
+                }
+            }
+
+            Divider()
+            Button("Add Book…", action: onAddBook)
+            Button("Manage Books…", action: onManageBooks)
+        } label: {
+            DashboardBookChipLabel(
+                title: book?.displayTitle ?? String(localized: "Choose a book"),
+                image: bookChipImage,
+                placeholderTint: boardsTint
+            )
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("Choose the book your progress is compared to")
+        .accessibilityLabel("Book for progress comparison")
+        .accessibilityValue(book?.displayTitle ?? "")
+    }
+
+    @ViewBuilder
+    private func menuLabel(_ title: String, isSelected: Bool) -> some View {
+        if isSelected {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
+        }
+    }
+
+    private func menuTitle(for book: DashboardBook) -> String {
+        let words = Formatters.formattedNumber(book.wordCount)
+        if book.isEstimate {
+            return String(localized: "\(book.displayTitle) — ~\(words) words")
+        }
+        return String(localized: "\(book.displayTitle) — \(words) words")
     }
 
     private func reviewCorrectionsHelp(count: Int) -> String {
@@ -206,16 +358,72 @@ private struct DashboardMomentumActionLabel: View {
     }
 }
 
+private struct DashboardBookChipLabel: View {
+    let title: String
+    let image: NSImage?
+    let placeholderTint: RGB
+
+    var body: some View {
+        HStack(spacing: 8) {
+            thumbnail
+
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 180, alignment: .leading)
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(DashboardMomentumBackground.headline)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 40)
+        .background(Color.white.opacity(0.82))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.06), radius: 5, y: 2)
+        .contentShape(Capsule())
+    }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        if let image {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 16, height: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .stroke(Color.black.opacity(0.18), lineWidth: 0.5)
+                )
+        } else {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(Color(red: placeholderTint.red, green: placeholderTint.green, blue: placeholderTint.blue))
+                .frame(width: 16, height: 22)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .stroke(Color.black.opacity(0.18), lineWidth: 0.5)
+                )
+        }
+    }
+}
+
 private struct DashboardImpactBackground: View {
     var isLocked = false
 
     var body: some View {
         ZStack {
-            Image("momentum-hero-bg")
-                .resizable()
-                .scaledToFill()
-                .blur(radius: isLocked ? 2.5 : 0)
-                .saturation(isLocked ? 0.78 : 1)
+            LinearGradient(
+                colors: [
+                    Color(red: 0.98, green: 0.85, blue: 0.74),
+                    Color(red: 0.99, green: 0.91, blue: 0.83),
+                ],
+                startPoint: .topLeading,
+                endPoint: .trailing
+            )
+            .saturation(isLocked ? 0.78 : 1)
 
             if isLocked {
                 Color.white.opacity(0.32)

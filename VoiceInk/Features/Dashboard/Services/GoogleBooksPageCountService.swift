@@ -11,9 +11,16 @@ struct GoogleBooksPageCountService: PageCountProviding {
     static let minimumPageCount = 40
 
     private let session: URLSession
+    private let overallTimeout: TimeInterval
 
-    init(session: URLSession = BookServiceHTTP.makeEphemeralSession()) {
+    /// `overallTimeout` is a wall-clock deadline: `timeoutIntervalForRequest` only bounds idle time,
+    /// so a trickling response could otherwise hold the Add button's spinner indefinitely.
+    init(
+        session: URLSession = BookServiceHTTP.makeEphemeralSession(),
+        overallTimeout: TimeInterval = BookServiceHTTP.requestTimeout
+    ) {
         self.session = session
+        self.overallTimeout = overallTimeout
     }
 
     static func makeURL(title: String, author: String?) -> URL? {
@@ -34,12 +41,27 @@ struct GoogleBooksPageCountService: PageCountProviding {
     func pageCount(title: String, author: String?) async -> Int? {
         guard Self.isGoogleBooksFallbackEnabled,
               let url = Self.makeURL(title: title, author: author) else { return nil }
-        do {
-            let (data, response) = try await session.data(for: BookServiceHTTP.makeRequest(url: url))
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
-            return Self.medianPageCount(from: data, matchingTitle: title)
-        } catch {
-            return nil
+        let session = session
+        let timeout = overallTimeout
+        return await withTaskGroup(of: Int?.self) { group in
+            group.addTask {
+                do {
+                    let (data, response) = try await session.data(for: BookServiceHTTP.makeRequest(url: url))
+                    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                        return nil
+                    }
+                    return Self.medianPageCount(from: data, matchingTitle: title)
+                } catch {
+                    return nil
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(max(0, timeout) * 1_000_000_000))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
     }
 

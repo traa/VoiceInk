@@ -75,6 +75,24 @@ struct GoogleBooksPageCountTests {
         #expect(garbage == nil)
     }
 
+    @Test func googleFallbackHonoursOverallDeadline() async {
+        let slow = GoogleBooksPageCountService(
+            session: StubURLProtocol.makeSession { request in
+                Thread.sleep(forTimeInterval: 2)
+                return (StubURLProtocol.response(for: request, status: 200), Data(Self.fixture.utf8))
+            },
+            overallTimeout: 0.2
+        )
+        let start = Date()
+        let count = await slow.pageCount(title: "Dune", author: nil)
+        #expect(count == nil)
+        #expect(Date().timeIntervalSince(start) < 1.5)
+    }
+
+    @Test func defaultDeadlineIsTenSeconds() {
+        #expect(BookServiceHTTP.requestTimeout == 10)
+    }
+
     @Test func googleFallbackConstantIsTrue() {
         #expect(GoogleBooksPageCountService.isGoogleBooksFallbackEnabled)
     }
