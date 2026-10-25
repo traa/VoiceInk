@@ -289,7 +289,7 @@ final class AddBookViewModel: ObservableObject {
                 guard let image = await covers.image(for: coverID),
                     let tint = ImageTint.averageColor(of: image)
                 else { return }
-                store.setCoverTint(tint, forBookID: bookID)
+                store.setCoverTintIfUnset(tint, forBookID: bookID)
             }
         }
 

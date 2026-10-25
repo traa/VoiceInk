@@ -14,7 +14,7 @@ struct LocalizationCoverageTests {
         "Couldn't download that image. Check the address and your connection.",
         "The server took too long to respond.",
         "That doesn't look like an image (PNG, JPEG or HEIC).",
-        "That image is larger than 10 MB.",
+        "That image is too large (over 10 MB or 50 megapixels).",
         "That image is too small to use as a banner (at least 300 px wide).",
         // Open book (OpenBookGeometry, DashboardOpenBookView)
         "~%@ of %@ pages dictated",

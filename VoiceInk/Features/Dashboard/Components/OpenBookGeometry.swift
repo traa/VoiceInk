@@ -53,7 +53,9 @@ struct OpenBookGeometry: Equatable {
             clamped = min(max(progress, 0), 1)
         }
         let pages = max(totalPages, 2)
-        let dictated = Int((clamped * Double(pages)).rounded())
+        // Never "N of N" before the book is finished.
+        let rounded = Int((clamped * Double(pages)).rounded())
+        let dictated = clamped >= 1 ? rounded : min(pages - 1, rounded)
 
         var sL = totalStackDepth * CGFloat(clamped)
         var sR = totalStackDepth * CGFloat(1 - clamped)
@@ -175,6 +177,8 @@ struct OpenBookGeometry: Equatable {
         }
 
         /// Rows sample the top and bottom quadratics at the same parameter `t`, so they bow with the page.
+        /// Both pages are left-aligned, as in real typesetting: every row starts at the page's left text
+        /// margin (outer edge on the left page, gutter side on the right page) and is ragged on the right.
         func textRows(lengths: [CGFloat]) -> Path {
             let startT: CGFloat = 0.1
             let spanT: CGFloat = 0.74
@@ -183,7 +187,9 @@ struct OpenBookGeometry: Equatable {
             for (index, length) in lengths.enumerated() {
                 let fraction = 0.13 + 0.74 * CGFloat(index) / CGFloat(max(lengths.count - 1, 1))
                 for step in 0...segments {
-                    let t = startT + spanT * length * CGFloat(step) / CGFloat(segments)
+                    // `t` runs from the outer edge (0) to the gutter (1); on the right page the left margin is the gutter side.
+                    let travelled = spanT * length * CGFloat(step) / CGFloat(segments)
+                    let t = direction < 0 ? startT + travelled : startT + spanT - travelled
                     let top = quad(topOuter, topControl, topGutter, t)
                     let bottom = quad(bottomOuter, bottomControl, bottomGutter, t)
                     let point = CGPoint(x: top.x, y: lerp(top.y, bottom.y, fraction))

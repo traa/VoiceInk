@@ -399,6 +399,44 @@ struct BannerImageImporterTests {
         }
     }
 
+    // MARK: - Decoded pixel cap
+
+    /// 8-bit grayscale solid image: 64 MB in memory but a few KB as PNG.
+    private static func grayPNG(width: Int, height: Int) throws -> Data {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue))
+        context.setFillColor(gray: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let image = try #require(context.makeImage())
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, nil)
+        try #require(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    @Test func hugeDecodedImageSmallOnDiskIsRejected() throws {
+        let data = try Self.grayPNG(width: 8000, height: 8000) // 64 MP > 50 MP cap
+        #expect(data.count < BannerImageImporter.maxBytes)
+        let directory = try Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("huge.png")
+        try data.write(to: file)
+        #expect(throws: BannerImportError.tooLarge) {
+            try BannerImageImporter().importImage(fromFile: file)
+        }
+    }
+
+    @Test func largeButUnderCapImagePasses() throws {
+        let directory = try Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("big.png")
+        try Self.png(width: 4000, height: 2000).write(to: file)
+        let output = try BannerImageImporter().importImage(fromFile: file)
+        #expect(try Self.decode(output).width == 1600)
+    }
+
     // MARK: - Messages
 
     @Test func userMessagesMatchSpec() {
@@ -408,7 +446,7 @@ struct BannerImageImporterTests {
         #expect(BannerImportError.unreachable.userMessage == "Couldn't download that image. Check the address and your connection.")
         #expect(BannerImportError.timedOut.userMessage == "The server took too long to respond.")
         #expect(BannerImportError.notAnImage.userMessage == "That doesn't look like an image (PNG, JPEG or HEIC).")
-        #expect(BannerImportError.tooLarge.userMessage == "That image is larger than 10 MB.")
+        #expect(BannerImportError.tooLarge.userMessage == "That image is too large (over 10 MB or 50 megapixels).")
         #expect(BannerImportError.tooSmall.userMessage == "That image is too small to use as a banner (at least 300 px wide).")
     }
 }

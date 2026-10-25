@@ -23,7 +23,7 @@ enum BannerImportError: Error, Equatable {
         case .notAnImage:
             String(localized: "That doesn't look like an image (PNG, JPEG or HEIC).")
         case .tooLarge:
-            String(localized: "That image is larger than 10 MB.")
+            String(localized: "That image is too large (over 10 MB or 50 megapixels).")
         case .tooSmall:
             String(localized: "That image is too small to use as a banner (at least 300 px wide).")
         }
@@ -43,6 +43,8 @@ struct BannerImageImporter: BannerImporting {
     static let minPixelWidth = 300
     static let defaultOverallTimeout: TimeInterval = 10
     static let jpegQuality = 0.85
+    /// Decoded-size cap (width × height), checked from the header before decoding.
+    static let maxDecodedPixels: Int64 = 50_000_000
 
     private let session: URLSession
     private let overallTimeout: TimeInterval
@@ -140,6 +142,9 @@ struct BannerImageImporter: BannerImporting {
               let pixelWidth = properties[kCGImagePropertyPixelWidth] as? Int,
               let pixelHeight = properties[kCGImagePropertyPixelHeight] as? Int
         else { throw BannerImportError.notAnImage }
+
+        // A tiny-on-disk PNG can still decode to gigabytes; refuse before any pixel is decoded.
+        guard Int64(pixelWidth) * Int64(pixelHeight) <= maxDecodedPixels else { throw BannerImportError.tooLarge }
 
         // EXIF orientations 5...8 swap the axes, so the displayed width is the stored height.
         let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1

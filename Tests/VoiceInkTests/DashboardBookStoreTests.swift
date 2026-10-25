@@ -204,6 +204,37 @@ struct DashboardBookStoreTests {
         #expect(store.customBooks.first?.coverTint == tint)
     }
 
+    @Test func lateCoverTintDoesNotOverrideBannerOrExistingTint() throws {
+        let env = try makeEnv()
+        let store = makeStore(env)
+        let cover = RGB(red: 0.9, green: 0.1, blue: 0.1)
+
+        // Plain book: applied.
+        let plain = customBook(id: "custom.plain")
+        store.add(plain)
+        #expect(store.setCoverTintIfUnset(cover, forBookID: plain.id))
+        #expect(store.customBooks.first { $0.id == plain.id }?.coverTint == cover)
+        // Already tinted: untouched.
+        #expect(!store.setCoverTintIfUnset(RGB(red: 0, green: 0, blue: 1), forBookID: plain.id))
+        #expect(store.customBooks.first { $0.id == plain.id }?.coverTint == cover)
+
+        // Banner set while the cover fetch was in flight: banner's tint wins.
+        let withBanner = customBook(id: "custom.banner")
+        store.add(withBanner)
+        let jpeg = try #require(NSImage(size: NSSize(width: 8, height: 8), flipped: false) { rect in
+            NSColor(srgbRed: 0.1, green: 0.2, blue: 0.9, alpha: 1).setFill()
+            rect.fill()
+            return true
+        }.tiffRepresentation.flatMap { NSBitmapImageRep(data: $0) }?.representation(using: .jpeg, properties: [:]))
+        try store.setBanner(jpeg, forBookID: withBanner.id)
+        let bannerTint = store.customBooks.first { $0.id == withBanner.id }?.coverTint
+        #expect(!store.setCoverTintIfUnset(cover, forBookID: withBanner.id))
+        #expect(store.customBooks.first { $0.id == withBanner.id }?.coverTint == bannerTint)
+
+        // Deleted/unknown book: nothing.
+        #expect(!store.setCoverTintIfUnset(cover, forBookID: "custom.gone"))
+    }
+
     @Test func allBooksHidesHiddenBuiltInsButNeverCustom() throws {
         let env = try makeEnv()
         let store = makeStore(env)

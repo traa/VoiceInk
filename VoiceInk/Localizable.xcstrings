@@ -26881,31 +26881,31 @@
         }
       }
     },
-    "That image is larger than 10 MB." : {
-      "comment" : "Banner import error shown when the image exceeds 10 MB.",
+    "That image is too large (over 10 MB or 50 megapixels)." : {
+      "comment" : "Banner import error shown when the image exceeds 10 MB or 50 megapixels.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dieses Bild ist größer als 10 MB."
+            "value" : "Dieses Bild ist zu groß (über 10 MB oder 50 Megapixel)."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That image is larger than 10 MB."
+            "value" : "That image is too large (over 10 MB or 50 megapixels)."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cette image dépasse 10 Mo."
+            "value" : "Cette image est trop volumineuse (plus de 10 Mo ou 50 mégapixels)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "该图片超过 10 MB。"
+            "value" : "该图片过大（超过 10 MB 或 5000 万像素）。"
           }
         }
       }

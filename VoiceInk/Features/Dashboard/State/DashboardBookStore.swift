@@ -132,6 +132,18 @@ final class DashboardBookStore: ObservableObject {
         }
     }
 
+    /// For background cover fetches that finish late: applies `tint` only when the custom book still exists,
+    /// has no banner and no tint (a banner set meanwhile owns the tint). Returns whether it was applied.
+    @discardableResult
+    func setCoverTintIfUnset(_ tint: RGB, forBookID id: String) -> Bool {
+        guard let current = customBooks.first(where: { $0.id == id }),
+            current.coverTint == nil,
+            current.customBannerFile == nil
+        else { return false }
+        setCoverTint(tint, forBookID: id)
+        return true
+    }
+
     /// Synchronous, disk-backed lookup cached by book ID and file modification date.
     func bannerImage(for book: DashboardBook) -> NSImage? {
         guard let file = book.customBannerFile else { return nil }

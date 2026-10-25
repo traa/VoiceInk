@@ -31,7 +31,7 @@ My goal is to make it **the most efficient and privacy-focused voice-to-text sol
 ## Features
 
 - 🎙️ **Accurate Transcription**: Local AI models that transcribe your voice to text with 99% accuracy, almost instantly
-- 🔒 **Privacy First**: 100% offline processing ensures your data never leaves your device
+- 🔒 **Privacy First**: Transcription is 100% offline, so your voice and transcripts never leave your device
   - Transcription stays fully offline. Dashboard book search is an opt-in online lookup, made only when you use it: the title you type is sent to [Open Library](https://openlibrary.org), the page count may be looked up on Google Books, and cover or banner images are requested from covers.openlibrary.org (or from the address you enter for a banner URL). Nothing else is sent.
 - ⚡ **Modes**: Intelligent app detection automatically applies your perfect pre-configured settings based on the app/ URL you're on
 - 🧠 **Context Aware**: Smart AI that understands your screen content and adapts to the context

@@ -131,4 +131,58 @@ struct OpenBookGeometryTests {
                 == "~0 of 600 pages dictated"
         )
     }
+
+    // MARK: - Text rows (both pages left-aligned like real typesetting)
+
+    /// (start, end) points of every sub-path.
+    private func rowEnds(_ path: Path) -> [(start: CGPoint, end: CGPoint)] {
+        var rows: [(CGPoint, CGPoint)] = []
+        var start = CGPoint.zero
+        var last = CGPoint.zero
+        path.forEach { element in
+            switch element {
+            case .move(let p):
+                if rows.count > 0 || last != .zero { rows.append((start, last)) }
+                start = p
+                last = p
+            case .line(let p): last = p
+            default: break
+            }
+        }
+        rows.append((start, last))
+        return rows
+    }
+
+    @Test func textRowsStartAtLeftMarginOfEachPage() {
+        let geometry = make(0.5)
+        for (path, isRight) in [(geometry.leftTextRows, false), (geometry.rightTextRows, true)] {
+            let rows = rowEnds(path)
+            #expect(rows.count == 9)
+            let startX = rows[0].start.x
+            for row in rows {
+                // Same left margin on every row, ragged on the right.
+                #expect(abs(row.start.x - startX) < 0.001)
+                #expect(row.end.x >= row.start.x)
+            }
+            #expect(rows.contains { $0.end.x - $0.start.x > 1 })
+            if isRight {
+                #expect(startX > OpenBookGeometry.gutterX)
+                #expect(startX < OpenBookGeometry.gutterX + 25)
+            } else {
+                #expect(startX < OpenBookGeometry.gutterX)
+                #expect(startX < OpenBookGeometry.leftOuterX + 25)
+            }
+        }
+    }
+
+    // MARK: - Caption never reads "N of N" before the book is finished
+
+    @Test func unfinishedBookNeverShowsAllPages() {
+        let almost = make(0.9999)
+        #expect(!almost.isFinished)
+        #expect(almost.pagesDictated == 599)
+        #expect(make(0.9999, totalPages: 2).pagesDictated == 1)
+        #expect(make(1).pagesDictated == 600)
+        #expect(make(0.5).pagesDictated == 300)
+    }
 }
