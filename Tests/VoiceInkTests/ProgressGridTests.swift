@@ -8,46 +8,61 @@ struct ProgressGridTests {
 
     // MARK: - Layout
 
-    @Test func cellCountIsPagesForSmallBooksAndCappedAt240() {
+    private let sizes = [CGSize(width: 375, height: 190), CGSize(width: 300, height: 160), CGSize(width: 520, height: 220)]
+
+    @Test func cellCountTracksPagesForNormalBooksAndIsCapped() {
         #expect(ProgressGrid.maxCells == 240)
-        for pages in [2, 3, 17, 90, 239, 240] {
-            #expect(ProgressGrid.make(totalPages: pages, size: artSize).cellCount == pages)
+        for size in sizes {
+            for pages in [60, 77, 90, 118, 150, 200, 240] {
+                let grid = ProgressGrid.make(totalPages: pages, size: size)
+                let error = abs(Double(grid.cellCount - pages)) / Double(pages)
+                #expect(error <= 0.15, "pages \(pages) size \(size): \(grid.cellCount) cells")
+            }
+            for pages in [241, 600, 2_545, 100_000] {
+                let grid = ProgressGrid.make(totalPages: pages, size: size)
+                #expect(grid.cellCount <= 240 && grid.cellCount >= 200, "pages \(pages): \(grid.cellCount)")
+            }
         }
-        for pages in [241, 600, 2_545, 100_000] {
-            #expect(ProgressGrid.make(totalPages: pages, size: artSize).cellCount == 240)
+    }
+
+    @Test func tinyBooksAreSubdividedSoCellsStaySmall() {
+        for size in sizes {
+            for pages in [2, 3, 8, 20] {
+                let grid = ProgressGrid.make(totalPages: pages, size: size)
+                #expect(grid.cellCount > pages)
+                #expect(grid.cellWidth <= ProgressGrid.maxCellSide + 0.5, "pages \(pages) size \(size)")
+                #expect(grid.cellHeight <= ProgressGrid.maxCellSide + 0.5, "pages \(pages) size \(size)")
+            }
         }
     }
 
     @Test func pagesPerCellIsPagesOverCells() {
-        #expect(ProgressGrid.make(totalPages: 90, size: artSize).pagesPerCell == 1)
-        #expect(ProgressGrid.make(totalPages: 600, size: artSize).pagesPerCell == 2.5)
-        #expect(ProgressGrid.make(totalPages: 2_400, size: artSize).pagesPerCell == 10)
+        for pages in [8, 90, 600, 2_400] {
+            let grid = ProgressGrid.make(totalPages: pages, size: artSize)
+            #expect(abs(grid.pagesPerCell * Double(grid.cellCount) - Double(pages)) < 1e-9)
+        }
     }
 
-    @Test func gridAlwaysHoldsEveryCellAndCellsAreRoughlySquare() {
-        for pages in [2, 5, 20, 77, 90, 118, 240, 600, 2_545] {
-            for size in [CGSize(width: 375, height: 190), CGSize(width: 300, height: 160), CGSize(width: 520, height: 220)] {
+    @Test func gridCoversTheArtExactlyWithNearSquareCells() {
+        for pages in [2, 5, 8, 20, 77, 90, 118, 240, 600, 2_545] {
+            for size in sizes {
                 let grid = ProgressGrid.make(totalPages: pages, size: size)
-                #expect(grid.columns * grid.rows >= grid.cellCount)
-                // No fully empty trailing column.
-                #expect((grid.columns - 1) * grid.rows < grid.cellCount)
-                if grid.cellCount >= 24 {
-                    let aspect = grid.cellWidth / grid.cellHeight
-                    #expect(aspect > 0.6 && aspect < 1.6, "pages \(pages) size \(size): aspect \(aspect)")
-                }
-                #expect(grid.cellWidth * CGFloat(grid.columns) <= size.width + 0.001)
-                #expect(grid.cellHeight * CGFloat(grid.rows) <= size.height + 0.001)
+                #expect(grid.columns * grid.rows == grid.cellCount)
+                #expect(abs(grid.cellWidth * CGFloat(grid.columns) - size.width) < 0.001)
+                #expect(abs(grid.cellHeight * CGFloat(grid.rows) - size.height) < 0.001)
+                let aspect = Double(grid.cellWidth / grid.cellHeight)
+                #expect(aspect >= 0.85 - 1e-9 && aspect <= 1.15 + 1e-9, "pages \(pages) size \(size): aspect \(aspect)")
             }
         }
     }
 
     @Test func degenerateInputsStaySane() {
         let tiny = ProgressGrid.make(totalPages: 0, size: artSize)
-        #expect(tiny.cellCount == 1 && tiny.columns == 1 && tiny.rows == 1)
+        #expect(tiny.cellCount == tiny.columns * tiny.rows && tiny.cellCount >= 1)
         let negative = ProgressGrid.make(totalPages: -5, size: artSize)
-        #expect(negative.cellCount == 1)
+        #expect(negative.cellCount == tiny.cellCount)
         let zeroSize = ProgressGrid.make(totalPages: 100, size: .zero)
-        #expect(zeroSize.columns * zeroSize.rows >= zeroSize.cellCount)
+        #expect(zeroSize.columns * zeroSize.rows == zeroSize.cellCount)
         #expect(zeroSize.cellWidth.isFinite && zeroSize.cellHeight.isFinite)
     }
 

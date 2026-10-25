@@ -33,8 +33,11 @@ enum BannerTreatment {
     static let artWidthFraction: CGFloat = 0.55
     /// Blurred images are over-scaled so the blurred edges leave no transparent fringe.
     static let blurredOverscale: CGFloat = 1.15
-    /// Share of the art's width over which it dissolves into the beige gradient on its left edge.
-    static let leftFadeFraction: CGFloat = 0.12
+    /// The mountains bitmap is zoomed toward its top-right so its plain beige left side is cropped away.
+    static let defaultBannerZoom: CGFloat = 1.3
+    /// Share of the art's width over which un-gridded art (locked, or no book) dissolves into the beige
+    /// gradient on its left edge. The grid reveal itself has a clean edge: cells never sit in a fade.
+    static let leftFadeFraction: CGFloat = 0.25
     /// Locked insights state (spec §8.6 item 5): blur added on top of the art's own blur logic,
     /// plus the same desaturation and white veil the old bitmap background got.
     static let lockedExtraBlurRadius: CGFloat = 2.5
@@ -43,10 +46,10 @@ enum BannerTreatment {
     /// Beige wash over locked art so the lock prompt stays legible where it meets the art.
     static let lockedWashOpacity: Double = 0.5
     /// Grid reveal (spec §8.7): art in the not-yet-dictated cells.
-    static let mutedSaturation: Double = 0.25
-    static let mutedDarkening: Double = 0.22
-    static let cellCornerRadius: CGFloat = 2.5
-    static let cellHairlineOpacity: Double = 0.16
+    static let mutedSaturation: Double = 0.3
+    static let mutedDarkening: Double = 0.15
+    static let cellCornerRadius: CGFloat = 2
+    static let cellHairlineOpacity: Double = 0.15
 
     /// The original low-poly mountains bitmap, used as the art of books without cover or custom banner.
     static var defaultBannerImage: NSImage? { NSImage(named: "momentum-hero-bg") }
@@ -106,7 +109,7 @@ struct DashboardBookBannerArt: View {
             let size = proxy.size
             let blur = blurRadius(artWidth: size.width)
             ZStack {
-                if let reveal, !isLocked {
+                if let reveal, showsGrid {
                     revealLayers(reveal: reveal, size: size, blur: blur)
                 } else {
                     artImage(blur: blur + (isLocked ? BannerTreatment.lockedExtraBlurRadius : 0))
@@ -116,10 +119,10 @@ struct DashboardBookBannerArt: View {
                 }
             }
             .frame(width: size.width, height: size.height)
-            .mask(fadeMask)
+            .mask { if showsGrid { Color.black } else { fadeMask } }
             .accessibilityHidden(true)
             .overlay(alignment: .bottomTrailing) {
-                if let reveal, !isLocked, showsCaption {
+                if let reveal, showsGrid, showsCaption {
                     captionPill(reveal: reveal)
                         .padding(10)
                 }
@@ -127,6 +130,8 @@ struct DashboardBookBannerArt: View {
         }
         .allowsHitTesting(false)
     }
+
+    private var showsGrid: Bool { reveal != nil && !isLocked }
 
     // MARK: - Layers
 
@@ -148,6 +153,7 @@ struct DashboardBookBannerArt: View {
                     .resizable()
                     .scaledToFill()
                     .scaleEffect(blur > 0 ? BannerTreatment.blurredOverscale : 1)
+                    .scaleEffect(isDefaultBanner ? BannerTreatment.defaultBannerZoom : 1, anchor: .topTrailing)
                     .blur(radius: blur)
             }
             .clipped()
@@ -159,11 +165,10 @@ struct DashboardBookBannerArt: View {
         let state = GridReveal.make(ratio: reveal.ratio, cellCount: grid.cellCount)
         let radius = min(BannerTreatment.cellCornerRadius, min(grid.cellWidth, grid.cellHeight) / 4)
         ZStack {
-            // Muted base, visible in every cell (the gaps show the beige card).
+            // Muted base over the whole art: it also fills the 1 pt gaps, so the art stays one picture.
             artImage(blur: blur)
                 .saturation(BannerTreatment.mutedSaturation)
                 .overlay(Color.black.opacity(BannerTreatment.mutedDarkening))
-                .mask(cellMask(grid: grid, radius: radius) { _ in 1 })
 
             // Full colour through the filled cells (the next one partially).
             artImage(blur: blur)

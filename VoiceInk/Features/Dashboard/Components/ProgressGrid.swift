@@ -3,10 +3,12 @@ import Foundation
 
 /// Pure layout of the "grid colour reveal" over the hero's banner art (spec §8.7).
 ///
-/// The art region is divided into `cellCount = min(totalPages, 240)` equal slots (one cell is
-/// `pagesPerCell` pages; exactly one page for books of up to 240 pages). Slots are as square as the
-/// region allows. Cells fill column-major: top to bottom within a column, columns left to right (like the
-/// consistency calendar). Slots beyond `cellCount` in the last column are simply not drawn.
+/// The art rectangle is covered exactly by `columns × rows` cells (no ragged or hidden cells), each at
+/// most `maxCellSide` points and with an aspect ratio of 0.85...1.15 whenever the size allows. The cell
+/// count `cellCount` aims at the page count (`min(totalPages, 240)`), raised so cells stay small for tiny
+/// books; the reveal is proportional (`filled = floor(p · cellCount)`), so a cell is `pagesPerCell`
+/// (possibly fractional) pages. Cells fill column-major: top to bottom within a column, columns left to
+/// right (like the consistency calendar).
 struct ProgressGrid: Equatable {
     struct Position: Equatable {
         let column: Int
@@ -14,40 +16,57 @@ struct ProgressGrid: Equatable {
     }
 
     static let maxCells = 240
+    /// Cells never exceed this side length (points) when the art is large enough to be subdivided.
+    static let maxCellSide: CGFloat = 44
+    static let minAspect = 0.85
+    static let maxAspect = 1.15
     /// Visible gap between neighbouring cells, in points.
-    static let gap: CGFloat = 1.5
+    static let gap: CGFloat = 1
 
     let columns: Int
     let rows: Int
     let cellCount: Int
     let pagesPerCell: Double
-    /// Size of one grid slot (cell plus its share of the gap).
+    /// Size of one grid slot (cell plus its share of the gap). `cellWidth × columns` is the art width.
     let cellWidth: CGFloat
     let cellHeight: CGFloat
 
     static func make(totalPages: Int, size: CGSize) -> ProgressGrid {
-        let cells = min(max(totalPages, 1), maxCells)
+        let pages = max(totalPages, 1)
         let width = size.width.isFinite ? max(size.width, 1) : 1
         let height = size.height.isFinite ? max(size.height, 1) : 1
 
+        // Fewest cells keeping every cell within `maxCellSide`, never more than the cap.
+        let smallestCount = Int((width / maxCellSide).rounded(.up)) * Int((height / maxCellSide).rounded(.up))
+        let target = min(max(min(pages, maxCells), smallestCount), maxCells)
+
         var best: (columns: Int, rows: Int, score: Double)?
-        for columns in 1...cells {
-            let rows = (cells + columns - 1) / columns
-            // An empty trailing column would make the art's right edge look unfinished.
-            guard (columns - 1) * rows < cells else { continue }
-            let slotWidth = Double(width) / Double(columns)
-            let slotHeight = Double(height) / Double(rows)
-            let score = abs(log(slotWidth / slotHeight))
-            if best == nil || score < best!.score {
-                best = (columns, rows, score)
+        var fallback: (columns: Int, rows: Int, score: Double)?
+        for columns in 1...maxCells {
+            for rows in 1...(maxCells / columns) {
+                let count = columns * rows
+                let slotWidth = Double(width) / Double(columns)
+                let slotHeight = Double(height) / Double(rows)
+                let aspect = slotWidth / slotHeight
+                let countError = abs(Double(count - target)) / Double(target)
+                let aspectError = abs(log(aspect))
+                if aspect >= minAspect, aspect <= maxAspect, CGFloat(slotWidth) <= maxCellSide + 0.5 || count == maxCells,
+                    best == nil || countError < best!.score {
+                    best = (columns, rows, countError)
+                }
+                let blended = countError + aspectError
+                if fallback == nil || blended < fallback!.score {
+                    fallback = (columns, rows, blended)
+                }
             }
         }
-        let chosen = best ?? (1, cells, 0)
+        let chosen = best ?? fallback ?? (1, 1, 0)
+        let count = chosen.columns * chosen.rows
         return ProgressGrid(
             columns: chosen.columns,
             rows: chosen.rows,
-            cellCount: cells,
-            pagesPerCell: Double(max(totalPages, 1)) / Double(cells),
+            cellCount: count,
+            pagesPerCell: Double(pages) / Double(count),
             cellWidth: width / CGFloat(chosen.columns),
             cellHeight: height / CGFloat(chosen.rows)
         )
