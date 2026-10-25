@@ -108,7 +108,7 @@ final class DashboardBookStore: ObservableObject {
         try jpegData.write(to: bannersDirectory.appendingPathComponent(fileName), options: [.atomic])
         imageCache[id] = nil
 
-        let tint = ImageTint.averageColor(of: image).map(ImageTint.boardsTint(from:))
+        let tint = ImageTint.averageColor(of: image)
         mutateArt(forBookID: id) { file, coverTint in
             file = fileName
             coverTint = tint

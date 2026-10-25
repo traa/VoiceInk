@@ -125,9 +125,14 @@ struct DashboardBookStoreTests {
         #expect(updated.customBannerFile == "\(book.id).jpg")
         #expect(store.bannerImage(for: updated) != nil)
         let tint = try #require(updated.coverTint)
-        // Banner is solid blue; boards tint is darkened by 20 %.
-        #expect(tint.blue > tint.red)
-        #expect(tint.blue <= 0.85)
+        // coverTint is the raw average of the banner (darkening happens at render time).
+        let banner = try #require(store.bannerImage(for: updated))
+        let expected = try #require(ImageTint.averageColor(of: banner))
+        #expect(abs(tint.red - expected.red) < 0.02)
+        #expect(abs(tint.green - expected.green) < 0.02)
+        #expect(abs(tint.blue - expected.blue) < 0.02)
+        #expect(tint.blue > 0.9)
+        #expect(tint.red < 0.1)
     }
 
     @Test func missingBannerFileYieldsNilImage() throws {
