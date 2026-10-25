@@ -149,13 +149,56 @@ final class ManageBooksViewModel: ObservableObject {
 
 // MARK: - Panel
 
-struct ManageBooksPanel: View {
-    @ObservedObject var viewModel: ManageBooksViewModel
+/// What the dashboard's `.sidePanel` shows for "Manage Books…". The view model is created by the panel
+/// view itself (`@StateObject`), when the panel is first built, not stored by the dashboard in an
+/// optional `@State` that has to be filled in before the presentation flag is flipped.
+///
+/// The old wiring (`@State manageBooksViewModel`, set right before `isManageBooksPanelPresented = true`
+/// inside the chip menu's action) rendered the panel from a closure that still read `nil`, so the first
+/// presentation was an empty side panel with only its invisible dismiss layer; it filled in after the next
+/// dashboard re-render (mouse move / click), or the dismiss layer swallowed the clicks first.
+struct ManageBooksPanelHost: View {
+    @StateObject private var viewModel: ManageBooksViewModel
+    let totalWords: Int
     let onClose: () -> Void
     let onAddBook: () -> Void
 
-    init(viewModel: ManageBooksViewModel, onClose: @escaping () -> Void = {}, onAddBook: @escaping () -> Void) {
+    init(
+        store: DashboardBookStore,
+        hidden: Binding<HiddenBookIDs>,
+        selectedID: Binding<String>,
+        totalWords: Int,
+        onClose: @escaping () -> Void,
+        onAddBook: @escaping () -> Void
+    ) {
+        _viewModel = StateObject(
+            wrappedValue: ManageBooksViewModel(store: store, hidden: hidden, selectedID: selectedID)
+        )
+        self.totalWords = totalWords
+        self.onClose = onClose
+        self.onAddBook = onAddBook
+    }
+
+    var body: some View {
+        ManageBooksPanel(viewModel: viewModel, totalWords: totalWords, onClose: onClose, onAddBook: onAddBook)
+    }
+}
+
+struct ManageBooksPanel: View {
+    @ObservedObject var viewModel: ManageBooksViewModel
+    /// Total dictated words; books with `wordCount <= totalWords` show a "Completed" mark.
+    let totalWords: Int
+    let onClose: () -> Void
+    let onAddBook: () -> Void
+
+    init(
+        viewModel: ManageBooksViewModel,
+        totalWords: Int = 0,
+        onClose: @escaping () -> Void = {},
+        onAddBook: @escaping () -> Void
+    ) {
         self.viewModel = viewModel
+        self.totalWords = totalWords
         self.onClose = onClose
         self.onAddBook = onAddBook
     }
@@ -197,7 +240,7 @@ struct ManageBooksPanel: View {
                     .foregroundColor(.secondary)
             }
             ForEach(books) { book in
-                ManageBookRow(viewModel: viewModel, book: book)
+                ManageBookRow(viewModel: viewModel, book: book, totalWords: totalWords)
             }
         }
     }
@@ -206,6 +249,7 @@ struct ManageBooksPanel: View {
 private struct ManageBookRow: View {
     @ObservedObject var viewModel: ManageBooksViewModel
     let book: DashboardBook
+    let totalWords: Int
 
     @State private var showsWordCountEditor = false
     @State private var showsBannerEditor = false
@@ -213,6 +257,7 @@ private struct ManageBookRow: View {
 
     private var isCustom: Bool { book.kind == .custom }
     private var isHidden: Bool { viewModel.isHidden(book) }
+    private var isPassed: Bool { DashboardProgressBenchmark.isPassed(book: book, totalWords: totalWords) }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -220,6 +265,7 @@ private struct ManageBookRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: book.displayTitle)
                     .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(isPassed ? .secondary : .primary)
                     .lineLimit(2)
                 if let author = book.author, !author.isEmpty {
                     Text(verbatim: author)
@@ -231,6 +277,17 @@ private struct ManageBookRow: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
+                if isPassed {
+                    Label {
+                        Text("Completed")
+                    } icon: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.green)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.green)
+                    .lineLimit(1)
+                }
             }
             Spacer(minLength: 8)
             actions

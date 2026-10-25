@@ -35,6 +35,8 @@ struct DashboardHeroCard: View {
     /// Cached cover (or banner) for a menu row; disk/memory only, never fetched. Nil draws the tinted placeholder.
     let menuThumbnailSource: (DashboardBook) -> NSImage?
     let menuBooks: [DashboardBook]
+    /// Total dictated words; books with `wordCount <= totalWords` are marked completed in the menu.
+    let totalWords: Int
     let isAutomaticSelected: Bool
     let selectedBookID: String?
     let onSelectAutomatic: () -> Void
@@ -208,13 +210,18 @@ struct DashboardHeroCard: View {
                             set: { _ in onSelectBook(menuBook) }
                         )
                     ) {
+                        let isPassed = DashboardProgressBenchmark.isPassed(book: menuBook, totalWords: totalWords)
+                        let rowTitle = Text(menuTitle(for: menuBook))
                         Label {
-                            Text(menuTitle(for: menuBook))
+                            // Only passed rows are restyled: forcing `.primary` on the others dims them in NSMenu.
+                            if isPassed { rowTitle.foregroundStyle(.secondary) } else { rowTitle }
                         } icon: {
                             Image(nsImage: BookMenuThumbnail.make(
                                 from: menuThumbnailSource(menuBook),
-                                tint: BannerTreatment.boardsTint(for: menuBook)))
+                                tint: BannerTreatment.boardsTint(for: menuBook),
+                                isPassed: isPassed))
                         }
+                        .accessibilityValue(isPassed ? Text("Completed") : Text(verbatim: ""))
                     }
                 }
             }
@@ -326,12 +333,18 @@ struct DashboardHeroCard: View {
     }
 }
 
-/// 16×22 pt menu-row thumbnail: aspect-filled cover/banner, or the tinted placeholder.
+/// 16×22 pt menu-row thumbnail: aspect-filled cover/banner, or the tinted placeholder. Passed (completed)
+/// books get a green check badge in the bottom-right corner. The image is never a template, so the
+/// colour survives in an `NSMenu`.
 enum BookMenuThumbnail {
     static let size = NSSize(width: 16, height: 22)
+    static let badgeDiameter: CGFloat = 11
+    /// Fixed green (not the adaptive system green) so the badge reads the same on light and dark menus.
+    private static let passedGreen = NSColor(srgbRed: 0.10, green: 0.60, blue: 0.25, alpha: 1)
 
-    static func make(from source: NSImage?, tint: RGB) -> NSImage {
+    static func make(from source: NSImage?, tint: RGB, isPassed: Bool = false) -> NSImage {
         let image = NSImage(size: size, flipped: false) { rect in
+            NSGraphicsContext.saveGraphicsState()
             let clip = NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2)
             clip.addClip()
             if let source, source.size.width > 0, source.size.height > 0 {
@@ -348,10 +361,32 @@ enum BookMenuThumbnail {
             NSColor.black.withAlphaComponent(0.2).setStroke()
             clip.lineWidth = 0.5
             clip.stroke()
+            NSGraphicsContext.restoreGraphicsState()
+
+            if isPassed { drawPassedBadge(in: rect) }
             return true
         }
         image.isTemplate = false
         return image
+    }
+
+    /// White ring + green `checkmark.circle.fill`, tucked into the bottom-right corner of `rect`.
+    private static func drawPassedBadge(in rect: NSRect) {
+        let badge = NSRect(
+            x: rect.maxX - badgeDiameter, y: rect.minY, width: badgeDiameter, height: badgeDiameter)
+        NSColor.white.setFill()
+        NSBezierPath(ovalIn: badge).fill()
+
+        let glyph = badge.insetBy(dx: 1, dy: 1)
+        let configuration = NSImage.SymbolConfiguration(paletteColors: [.white, passedGreen])
+        if let symbol = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration)
+        {
+            symbol.draw(in: glyph, from: .zero, operation: .sourceOver, fraction: 1)
+        } else {
+            passedGreen.setFill()
+            NSBezierPath(ovalIn: glyph).fill()
+        }
     }
 }
 

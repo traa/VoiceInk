@@ -66,6 +66,7 @@ struct LocalizationCoverageTests {
         "exact (you entered)",
         "%@ · %@",
         "Delete this book?",
+        "Completed",
         "“%@” and its custom banner will be removed.",
         "Edit word count…",
         "Exact word count",

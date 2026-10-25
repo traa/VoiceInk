@@ -10118,6 +10118,35 @@
         }
       }
     },
+    "Completed" : {
+      "comment" : "Shown on a book (Manage Books row, book menu accessibility value) when the user has already dictated at least as many words as the book contains.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgeschlossen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completed"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminé"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已完成"
+          }
+        }
+      }
+    },
     "Delete this book?" : {
       "comment" : "Title of the delete confirmation dialog for a custom book.",
       "localizations" : {

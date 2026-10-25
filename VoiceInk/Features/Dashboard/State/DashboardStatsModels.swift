@@ -486,6 +486,12 @@ enum DashboardProgressBenchmark {
         return !visible.contains { $0.id == selectedID }
     }
 
+    /// A book is "passed" once the user has dictated at least as many words as it contains.
+    /// Uses the book's effective `wordCount` (a user override replaces the page-count estimate).
+    static func isPassed(book: DashboardBook, totalWords: Int) -> Bool {
+        book.wordCount > 0 && totalWords >= book.wordCount
+    }
+
     static func progress(words: Int, book: DashboardBook) -> Double {
         guard book.wordCount > 0 else { return 0 }
         return min(1, max(0, Double(words) / Double(book.wordCount)))

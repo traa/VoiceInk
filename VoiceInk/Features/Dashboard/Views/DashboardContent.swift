@@ -52,7 +52,6 @@ struct DashboardContent: View {
     @ObservedObject private var bookStore = DashboardBookStore.shared
     @State private var isAddBookSheetPresented = false
     @State private var isManageBooksPanelPresented = false
-    @State private var manageBooksViewModel: ManageBooksViewModel?
     /// Bumped when a background cover fetch lands so the hero re-reads the (disk-only) cover cache.
     @State private var coverRevision = 0
     /// Books whose cover fetch was already attempted this app session (no retry after failure).
@@ -214,13 +213,14 @@ struct DashboardContent: View {
             }
         }
         .sidePanel(isPresented: $isManageBooksPanelPresented) {
-            if let manageBooksViewModel {
-                ManageBooksPanel(
-                    viewModel: manageBooksViewModel,
-                    onClose: { isManageBooksPanelPresented = false },
-                    onAddBook: { isAddBookSheetPresented = true }
-                )
-            }
+            ManageBooksPanelHost(
+                store: bookStore,
+                hidden: $hiddenBooks,
+                selectedID: $selectedBookID,
+                totalWords: statsSummary.totalWords,
+                onClose: { isManageBooksPanelPresented = false },
+                onAddBook: { isAddBookSheetPresented = true }
+            )
         }
     }
 
@@ -708,6 +708,7 @@ struct DashboardContent: View {
                 book.coverID.flatMap { BookCoverCache.shared.cachedImage(for: $0) } ?? bookStore.bannerImage(for: book)
             },
             menuBooks: visibleBooks.sorted { ($0.wordCount, $0.id) < ($1.wordCount, $1.id) },
+            totalWords: statsSummary.totalWords,
             isAutomaticSelected: selectedBookID.isEmpty,
             selectedBookID: selectedBookID.isEmpty ? nil : selectedBookID,
             onSelectAutomatic: { selectedBookID = "" },
@@ -771,11 +772,6 @@ struct DashboardContent: View {
     }
 
     private func openManageBooksPanel() {
-        manageBooksViewModel = ManageBooksViewModel(
-            store: bookStore,
-            hidden: $hiddenBooks,
-            selectedID: $selectedBookID
-        )
         isManageBooksPanelPresented = true
     }
 
