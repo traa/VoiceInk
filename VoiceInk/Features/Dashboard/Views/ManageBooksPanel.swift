@@ -253,7 +253,7 @@ private struct ManageBookRow: View {
     private var wordCountLine: String {
         let words = Formatters.formattedNumber(book.wordCount)
         let count = book.isEstimate ? String(localized: "~\(words) words") : String(localized: "\(words) words")
-        return "\(count) · \(viewModel.sourceLabel(for: book))"
+        return String(localized: "\(count) · \(viewModel.sourceLabel(for: book))")
     }
 
     private var thumbnail: some View {
