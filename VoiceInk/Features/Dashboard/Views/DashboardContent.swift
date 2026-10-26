@@ -47,6 +47,15 @@ struct DashboardContent: View {
     @AppStorage(AutoLearnSettings.isEnabledKey) private var isAutoLearnEnabled = true
     @AppStorage(AutoLearnSettings.hasFailureKey) private var hasAutoLearnFailure = false
     @AppStorage(AutoLearnSettings.failureAcknowledgedKey) private var isAutoLearnFailureAcknowledged = false
+    @AppStorage("dashboardSelectedBookID") private var selectedBookID: String = ""
+    @AppStorage("dashboardHiddenBuiltInBookIDs") private var hiddenBooks = HiddenBookIDs()
+    @ObservedObject private var bookStore = DashboardBookStore.shared
+    @State private var isAddBookSheetPresented = false
+    @State private var isManageBooksPanelPresented = false
+    /// Bumped when a background cover fetch lands so the hero re-reads the (disk-only) cover cache.
+    @State private var coverRevision = 0
+    /// Books whose cover fetch was already attempted this app session (no retry after failure).
+    @MainActor private static var coverFetchAttempts = Set<String>()
     @FocusState private var isNameFieldFocused: Bool
     @Query(Self.recentTranscriptionsDescriptor()) private var recentTranscriptionCandidates: [Transcription]
 
@@ -158,6 +167,27 @@ struct DashboardContent: View {
             autoLearnFailurePresentationTask?.cancel()
             autoLearnFailurePresentationTask = nil
         }
+        .onAppear {
+            clearStaleBookSelection()
+            ensureCoverTint()
+        }
+        .onChange(of: visibleBooks.map(\.id)) { _, _ in
+            clearStaleBookSelection()
+        }
+        .onChange(of: resolvedBook?.book.id) { _, _ in
+            ensureCoverTint()
+        }
+        .onChange(of: bookStore.customBooks) { _, _ in
+            ensureCoverTint()
+        }
+        .onChange(of: bookStore.builtInArt) { _, _ in
+            ensureCoverTint()
+        }
+        .sheet(isPresented: $isAddBookSheetPresented) {
+            AddBookSheet { book in
+                selectedBookID = book.id
+            }
+        }
         .sidePanel(isPresented: $isModelPerformancePanelPresented) {
             ModelPerformancePanel(
                 summaries: selectedModelPerformance
@@ -181,6 +211,16 @@ struct DashboardContent: View {
             AutoLearnReviewPanel {
                 isAutoLearnReviewPanelPresented = false
             }
+        }
+        .sidePanel(isPresented: $isManageBooksPanelPresented) {
+            ManageBooksPanelHost(
+                store: bookStore,
+                hidden: $hiddenBooks,
+                selectedID: $selectedBookID,
+                totalWords: statsSummary.totalWords,
+                onClose: { isManageBooksPanelPresented = false },
+                onAddBook: { isAddBookSheetPresented = true }
+            )
         }
     }
 
@@ -635,7 +675,9 @@ struct DashboardContent: View {
     }
 
     private var heroSection: some View {
-        DashboardHeroCard(
+        let resolved = resolvedBook
+        let art = bannerArt(for: resolved?.book)
+        return DashboardHeroCard(
             isLocked: shouldShowLockedInsightsState,
             headline: momentumHeadline,
             subtext: momentumSubtext,
@@ -645,9 +687,124 @@ struct DashboardContent: View {
             actionHelp: insightsActionHelp,
             actionAccessibilityLabel: insightsActionAccessibilityLabel,
             reviewCorrectionCount: dashboardReviewCorrectionCount,
+            hasLoadedStats: hasLoadedStatsSnapshot,
+            book: resolved?.book,
+            progressRatio: resolved.map {
+                DashboardProgressBenchmark.revealRatio(
+                    words: statsSummary.totalWords,
+                    book: $0.book,
+                    allowsRepeats: $0.allowsRepeats
+                )
+            } ?? 0,
+            bannerImage: art.image,
+            usesDefaultBanner: art.usesDefaultBanner,
+            isCustomBanner: art.isCustomBanner,
+            boardsTint: resolved.map { BannerTreatment.boardsTint(for: $0.book) } ?? ImageTint.clothPalette[0],
+            bookChipImage: art.coverImage,
+            menuThumbnailSource: { book in
+                book.coverID.flatMap { BookCoverCache.shared.cachedImage(for: $0) } ?? bookStore.bannerImage(for: book)
+            },
+            menuBooks: visibleBooks.sorted { ($0.wordCount, $0.id) < ($1.wordCount, $1.id) },
+            totalWords: statsSummary.totalWords,
+            isAutomaticSelected: selectedBookID.isEmpty,
+            selectedBookID: selectedBookID.isEmpty ? nil : selectedBookID,
+            onSelectAutomatic: { selectedBookID = "" },
+            onSelectBook: { selectedBookID = $0.id },
+            onAddBook: { isAddBookSheetPresented = true },
+            onManageBooks: openManageBooksPanel,
             onViewInsights: openInsightsIfAvailable,
             onReviewCorrections: openAutoLearnReviewPanel
         )
+    }
+
+    // MARK: - Books
+
+    private var visibleBooks: [DashboardBook] {
+        bookStore.allBooks(hiddenBuiltIns: hiddenBooks.ids)
+    }
+
+    private var resolvedBook: ResolvedBook? {
+        DashboardProgressBenchmark.resolveBook(
+            words: statsSummary.totalWords,
+            visible: visibleBooks,
+            selectedID: selectedBookID.isEmpty ? nil : selectedBookID
+        )
+    }
+
+    private struct BannerArt {
+        var image: NSImage? = BannerTreatment.defaultBannerImage
+        var isCustomBanner = false
+        var coverImage: NSImage?
+        var usesDefaultBanner = true
+    }
+
+    /// Disk-only lookups: the hero never waits on the network.
+    private func bannerArt(for book: DashboardBook?) -> BannerArt {
+        _ = coverRevision
+        guard let book else { return BannerArt() }
+        let custom = bookStore.bannerImage(for: book)
+        let cover = book.coverID.flatMap { BookCoverCache.shared.cachedImage(for: $0) }
+        let source = BookArtSource.resolve(
+            book: book,
+            customBannerExists: custom != nil,
+            coverCached: cover != nil
+        )
+        switch source.kind {
+        case .customBanner:
+            return BannerArt(image: custom, isCustomBanner: true, coverImage: cover, usesDefaultBanner: false)
+        case .cover:
+            return BannerArt(image: cover, isCustomBanner: false, coverImage: cover, usesDefaultBanner: false)
+        case .defaultBanner:
+            return BannerArt(coverImage: cover)
+        }
+    }
+
+    private func clearStaleBookSelection() {
+        if DashboardProgressBenchmark.isSelectionStale(
+            selectedID: selectedBookID.isEmpty ? nil : selectedBookID,
+            visible: visibleBooks
+        ) {
+            selectedBookID = ""
+        }
+    }
+
+    private func openManageBooksPanel() {
+        isManageBooksPanelPresented = true
+    }
+
+    /// Keeps the persisted `coverTint` in step with the active banner source. When the cover isn't on
+    /// disk yet, starts one silent, non-blocking fetch per book per session.
+    private func ensureCoverTint() {
+        guard let book = resolvedBook?.book, book.coverTint == nil else { return }
+
+        if let banner = bookStore.bannerImage(for: book) {
+            if let tint = ImageTint.averageColor(of: banner) {
+                bookStore.setCoverTint(tint, forBookID: book.id)
+            }
+            return
+        }
+
+        guard let coverID = book.coverID else { return }
+        if let cover = BookCoverCache.shared.cachedImage(for: coverID) {
+            if let tint = ImageTint.averageColor(of: cover) {
+                bookStore.setCoverTint(tint, forBookID: book.id)
+            }
+            return
+        }
+
+        guard book.kind == .custom, Self.coverFetchAttempts.insert(book.id).inserted else { return }
+        let bookID = book.id
+        Task(priority: .utility) {
+            let cover = await BookCoverCache.shared.image(for: coverID)
+            coverRevision += 1
+            guard let cover,
+                let current = bookStore.customBooks.first(where: { $0.id == bookID }),
+                current.coverTint == nil,
+                bookStore.bannerImage(for: current) == nil,
+                let tint = ImageTint.averageColor(of: cover)
+            else { return }
+            bookStore.setCoverTint(tint, forBookID: bookID)
+        }
     }
 
     @ViewBuilder
@@ -928,29 +1085,28 @@ struct DashboardContent: View {
     }
 
     private var formattedProgressBenchmarkText: String {
-        switch DashboardProgressBenchmark.equivalence(for: statsSummary.totalWords) {
+        let resolved = resolvedBook
+
+        switch DashboardProgressBenchmark.equivalence(
+            for: statsSummary.totalWords,
+            book: resolved?.book,
+            allowsRepeats: resolved?.allowsRepeats ?? false
+        ) {
         case .matched(let title):
             return String(localized: "Dictated \(formattedAllTimeWords), equivalent to \(title).")
         case .repeated(let title, let count):
             return String(
                 localized:
-                    "Dictated \(formattedAllTimeWords), equivalent to \(title) \(formattedBenchmarkMultiple(count)).")
-        case .remaining(let words, let title):
-            guard words > 0, !title.isEmpty else {
-                return String(localized: "Dictated \(formattedAllTimeWords).")
-            }
-
+                    "Dictated \(formattedAllTimeWords), equivalent to \(title) \(DashboardProgressBenchmark.multipleText(count)).")
+        case .remaining(let words, let title, let isEstimate):
             let remainingWords = Formatters.formattedNumber(words)
+            if isEstimate {
+                return String(localized: "Dictated \(formattedAllTimeWords), ~\(remainingWords) words from \(title).")
+            }
             return String(localized: "Dictated \(formattedAllTimeWords), \(remainingWords) words from \(title).")
+        case .none:
+            return String(localized: "Dictated \(formattedAllTimeWords).")
         }
-    }
-
-    private func formattedBenchmarkMultiple(_ count: Int) -> String {
-        if count == 2 {
-            return String(localized: "twice")
-        }
-
-        return String(localized: "\(Formatters.formattedNumber(count)) times")
     }
 }
 
