@@ -56,6 +56,7 @@ struct VoiceInkApp: App {
             VocabularyWord.self,
             WordReplacement.self,
             SessionMetric.self,
+            SpanishPhrase.self,
         ])
         let resolvedContainer: ModelContainer
 
@@ -265,8 +266,18 @@ struct VoiceInkApp: App {
             cloudKitDatabase: .none
         )
 
+        let learningStoreURL = appSupportURL.appendingPathComponent("learning.store")
+        let learningSchema = Schema([SpanishPhrase.self])
+        let learningConfig = ModelConfiguration(
+            "learning",
+            schema: learningSchema,
+            url: learningStoreURL,
+            cloudKitDatabase: .none
+        )
+
         do {
-            return try ModelContainer(for: schema, configurations: transcriptConfig, dictionaryConfig, statsConfig)
+            return try ModelContainer(
+                for: schema, configurations: transcriptConfig, dictionaryConfig, statsConfig, learningConfig)
         } catch {
             logger.error(
                 "❌ Failed to create persistent ModelContainer:\n\(Self.fullErrorDescription(error), privacy: .public)")
@@ -284,8 +295,12 @@ struct VoiceInkApp: App {
         let statsSchema = Schema([SessionMetric.self])
         let statsConfig = ModelConfiguration("stats", schema: statsSchema, isStoredInMemoryOnly: true)
 
+        let learningSchema = Schema([SpanishPhrase.self])
+        let learningConfig = ModelConfiguration("learning", schema: learningSchema, isStoredInMemoryOnly: true)
+
         do {
-            return try ModelContainer(for: schema, configurations: transcriptConfig, dictionaryConfig, statsConfig)
+            return try ModelContainer(
+                for: schema, configurations: transcriptConfig, dictionaryConfig, statsConfig, learningConfig)
         } catch {
             logger.error(
                 "❌ Failed to create in-memory ModelContainer:\n\(Self.fullErrorDescription(error), privacy: .public)")
