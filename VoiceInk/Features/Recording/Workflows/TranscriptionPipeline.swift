@@ -294,6 +294,14 @@ class TranscriptionPipeline {
         )
 
         saveTranscriptionAndPostCompletion()
+
+        if transcription.transcriptionStatus == TranscriptionStatus.completed.rawValue,
+            !assistant.isFollowUp,
+            outputForDelivery?.outputMode == .paste,
+            let finalText, !finalText.isEmpty
+        {
+            SpanishCoachService.shared.dictationDidPaste(finalText)
+        }
     }
 
     private func metadata(for mode: ModeConfig?) -> (name: String?, emoji: String?) {

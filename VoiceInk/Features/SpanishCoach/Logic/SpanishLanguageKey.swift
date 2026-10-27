@@ -14,4 +14,11 @@ enum SpanishLanguageKey {
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
     }
+
+    /// "es" if supported, else "es-ES", else the first key with prefix "es"; nil if none.
+    static func key(in supportedLanguages: [String: String]) -> String? {
+        if supportedLanguages["es"] != nil { return "es" }
+        if supportedLanguages["es-ES"] != nil { return "es-ES" }
+        return supportedLanguages.keys.filter { $0.hasPrefix("es") }.sorted().first
+    }
 }

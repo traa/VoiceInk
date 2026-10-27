@@ -115,6 +115,7 @@ struct VoiceInkApp: App {
                 reviewer: autoLearnReviewer
             )
         }
+        SpanishCoachService.shared.configure(aiService: aiService, modelContainer: resolvedContainer)
 
         // 1. Create modelsDirectory URL
         let appSupportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
