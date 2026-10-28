@@ -10,9 +10,10 @@ struct SpanishPhraseStore {
 
     /// Insert a phrase per chunk, or bump `timesSeen`/`lastSeenAt` on an existing normalized match.
     func upsert(_ card: SpanishCard, now: Date) throws {
+        var seenKeys = Set<String>()
         for chunk in card.chunks {
             let key = SpanishLanguageKey.normalize(chunk.spanish)
-            guard !key.isEmpty else { continue }
+            guard !key.isEmpty, seenKeys.insert(key).inserted else { continue }
             var descriptor = FetchDescriptor<SpanishPhrase>(predicate: #Predicate { $0.normalizedSpanish == key })
             descriptor.fetchLimit = 1
             if let existing = try context.fetch(descriptor).first {

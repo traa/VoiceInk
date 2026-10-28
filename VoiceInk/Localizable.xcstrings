@@ -33407,7 +33407,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld sur %lld correct"
+            "value" : "%lld sur %lld corrects"
           }
         },
         "zh-Hans" : {

@@ -127,7 +127,7 @@ struct SpanishPracticeView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(isRecording ? .red : .accentColor)
-                    .disabled(model == nil || (!isRecording && dictationBusy))
+                    .disabled(!isRecording && (model == nil || dictationBusy))
 
                     if !isRecording {
                         Button("Just show me") {
@@ -217,17 +217,24 @@ struct SpanishPracticeView: View {
             try await activeRecorder.startRecording(toOutputFile: url)
             recordingURL = url
             step = .recording
+            // A dictation may have started while the recorder was starting; dictation wins.
+            if engine.recordingState != .idle { await abortForDictation() }
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     private func stopAndGrade(_ phrase: SpanishPhrase) async {
-        guard let recorder, let url = recordingURL, let practice = practiceModel else { return }
+        guard let recorder, let url = recordingURL else { return }
         step = .working
         recordingURL = nil
         await recorder.stopRecording()
         defer { try? FileManager.default.removeItem(at: url) }
+        // The model can disappear while recording; the recording is already stopped and deleted.
+        guard let practice = practiceModel else {
+            step = .prompt
+            return
+        }
 
         do {
             let raw = try await engine.serviceRegistry.transcribe(

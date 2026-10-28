@@ -74,4 +74,26 @@ struct SpanishCardParserTests {
     @Test func emptyResultReturnsNil() {
         #expect(SpanishCardParser.parse(#"{"sentence": "", "chunks": []}"#, dictation: english, maxChunks: 2) == nil)
     }
+
+    @Test func sourceInsideLongerWordIsRejected() {
+        let dictation = "I am learning Spanish today"
+        let response = json(sentence: dictation, chunks: [("learn", "aprender", "g")])
+        #expect(SpanishCardParser.parse(response, dictation: dictation, maxChunks: 2) == nil)
+    }
+
+    @Test func laterWholeWordMatchIsUsed() {
+        let dictation = "learning is fun and I learn it daily"
+        let response = json(sentence: dictation, chunks: [
+            ("learn", "aprender", "g"), ("learning", "aprendiendo", "g"),
+        ])
+        let card = SpanishCardParser.parse(response, dictation: dictation, maxChunks: 3)
+        #expect(card?.chunks.map(\.spanish) == ["aprendiendo", "aprender"])
+    }
+
+    @Test func wordRangeFindsLaterMatchFromCursor() {
+        let sentence = "learning to learn"
+        let range = SpanishCard.wordRange(of: "learn", in: sentence)
+        #expect(range.map { sentence[$0] } == "learn")
+        #expect(range?.lowerBound == sentence.index(sentence.startIndex, offsetBy: 12))
+    }
 }

@@ -12,6 +12,7 @@ final class SpanishCardPanel {
     private var panel: NSPanel?
     private var hosting: NSHostingController<SpanishCardView>?
     private var dismissTask: Task<Void, Never>?
+    private var anchor: NSPoint = .zero
 
     private init() {}
 
@@ -28,6 +29,8 @@ final class SpanishCardPanel {
             onHoverChange: { SpanishCardPanel.shared.hoverChanged($0) }
         )
         let hosting = NSHostingController(rootView: view)
+        // The panel is resized manually around a fixed anchor; stop SwiftUI resizing the window.
+        hosting.sizingOptions = []
         hosting.view.layoutSubtreeIfNeeded()
         let size = hosting.view.fittingSize
 
@@ -48,8 +51,9 @@ final class SpanishCardPanel {
 
         let screen = NSScreen.main ?? NSScreen.screens[0]
         let frame = screen.visibleFrame
-        panel.setFrameOrigin(
-            NSPoint(x: frame.midX - size.width / 2, y: frame.minY + Self.bottomOffset))
+        let anchorPoint = NSPoint(x: frame.midX, y: frame.minY + Self.bottomOffset)
+        anchor = anchorPoint
+        panel.setFrameOrigin(NSPoint(x: anchorPoint.x - size.width / 2, y: anchorPoint.y))
         panel.alphaValue = 0
         // Never key: the user keeps typing in the app they dictated into.
         panel.orderFrontRegardless()
@@ -82,13 +86,13 @@ final class SpanishCardPanel {
         }
     }
 
-    /// Resizes keeping the bottom edge and horizontal centre fixed.
+    /// Resizes keeping the bottom-centre anchor chosen in `show` fixed, regardless of any
+    /// window resize SwiftUI did first (AppKit keeps the top-left corner on its own resizes).
     private func fitPanelToContent() {
         guard let panel, let hosting else { return }
         let size = hosting.view.fittingSize
-        let old = panel.frame
         let newFrame = NSRect(
-            x: old.midX - size.width / 2, y: old.minY, width: size.width, height: size.height)
+            x: anchor.x - size.width / 2, y: anchor.y, width: size.width, height: size.height)
         panel.setFrame(newFrame, display: true)
     }
 
@@ -184,8 +188,7 @@ struct SpanishCardView: View {
         var result = Text("")
         var cursor = card.sentence.startIndex
         for chunk in card.chunks {
-            guard let range = card.sentence.range(
-                of: chunk.source, options: .caseInsensitive, range: cursor..<card.sentence.endIndex)
+            guard let range = SpanishCard.wordRange(of: chunk.source, in: card.sentence, from: cursor)
             else { continue }
             result = result + Text(card.sentence[cursor..<range.lowerBound])
             result = result + Text(chunk.spanish).bold().foregroundColor(.accentColor)

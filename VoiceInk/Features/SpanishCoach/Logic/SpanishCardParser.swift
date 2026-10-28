@@ -47,7 +47,7 @@ enum SpanishCardParser {
             let gloss = collapseWhitespace(raw.gloss ?? "")
             guard !source.isEmpty, !spanish.isEmpty, !gloss.isEmpty,
                 spanish.split(separator: " ").count <= maxSpanishWords,
-                let range = sentence.range(of: source, options: .caseInsensitive),
+                let range = SpanishCard.wordRange(of: source, in: sentence),
                 !kept.contains(where: { $0.range.overlaps(range) })
             else { continue }
             kept.append((range, .init(source: source, spanish: spanish, gloss: gloss)))
@@ -63,5 +63,32 @@ enum SpanishCardParser {
 
     private static func collapseWhitespace(_ text: String) -> String {
         text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    }
+}
+
+extension SpanishCard {
+    /// First case-insensitive match of `source` at or after `start` that begins and ends on a word
+    /// boundary, so "learn" never matches inside "learning". The parser and the card renderer share
+    /// this so they always agree on the same range.
+    static func wordRange(
+        of source: String, in sentence: String, from start: String.Index? = nil
+    ) -> Range<String.Index>? {
+        var searchStart = start ?? sentence.startIndex
+        while searchStart < sentence.endIndex,
+            let range = sentence.range(
+                of: source, options: .caseInsensitive, range: searchStart..<sentence.endIndex)
+        {
+            let beforeOK = range.lowerBound == sentence.startIndex
+                || !isWordCharacter(sentence[sentence.index(before: range.lowerBound)])
+            let afterOK = range.upperBound == sentence.endIndex
+                || !isWordCharacter(sentence[range.upperBound])
+            if beforeOK && afterOK { return range }
+            searchStart = sentence.index(after: range.lowerBound)
+        }
+        return nil
+    }
+
+    private static func isWordCharacter(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber
     }
 }
