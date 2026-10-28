@@ -75,10 +75,49 @@ struct LocalizationCoverageTests {
         "Banner…",
     ]
 
-    @Test func catalogHasNoNewStateEntriesForBookKeys() throws {
+    /// Strings emitted by the Spanish coach (card, My Spanish page, practice).
+    private static let spanishCoachKeys = [
+        "My Spanish",
+        "Show Spanish after each dictation",
+        "Uses %@ · %@ — change in AI Models",
+        "Connect an AI provider in AI Models to use this.",
+        "Paused until %@",
+        "Resume",
+        "%lld phrases · %lld to practise",
+        "Practise",
+        "Learn Spanish from your own words. Turn this on and VoiceInk will show a few words of what you just dictated in Spanish (Spain).",
+        "Dictate as usual — phrases from your dictations will appear here.",
+        "Delete",
+        "Spanish from what you just said",
+        "Pause for 1 hour",
+        "Matches.",
+        "Couldn't check this automatically. Compare with the answer.",
+        "All caught up",
+        "Practise anyway",
+        "How do you say:",
+        "Say it",
+        "Stop",
+        "Just show me",
+        "I knew it",
+        "I didn't",
+        "Your transcription model only understands English. Pick a multilingual model in AI Models to practise speaking.",
+        "Practice paused for dictation.",
+        "You said: %@",
+        "Correct!",
+        "Almost",
+        "Not quite",
+        "Next",
+        "Didn't catch that — try again.",
+        "%lld of %lld correct",
+        "Done",
+    ]
+
+    private static let allKeys = bookKeys + spanishCoachKeys
+
+    @Test func catalogHasNoNewStateEntriesForTranslatedKeys() throws {
         let strings = try Self.loadCatalogStrings()
 
-        for key in Self.bookKeys {
+        for key in Self.allKeys {
             guard let entry = strings[key] as? [String: Any] else {
                 Issue.record("Missing catalog key: \(key)")
                 continue
@@ -97,7 +136,7 @@ struct LocalizationCoverageTests {
     @Test func translationsKeepTheKeysFormatSpecifiers() throws {
         let strings = try Self.loadCatalogStrings()
 
-        for key in Self.bookKeys {
+        for key in Self.allKeys {
             guard let entry = strings[key] as? [String: Any] else { continue }
             let localizations = entry["localizations"] as? [String: Any] ?? [:]
             let expected = Self.specifiers(in: key)

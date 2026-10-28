@@ -129,6 +129,11 @@ enum AppDefaults {
             OnboardingSettings.preparedV2Key: false,
             "enableAnnouncements": true,
 
+            // Spanish Coach
+            SpanishCoachSettings.isEnabledKey: false,
+            SpanishCoachSettings.pausedUntilKey: 0.0,
+            SpanishCoachSettings.lastCardShownAtKey: 0.0,
+
             // Clipboard
             "restoreClipboardAfterPaste": true,
             "clipboardRestoreDelay": 2.0,
